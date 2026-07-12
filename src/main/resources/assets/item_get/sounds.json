@@ -1,0 +1,36 @@
+{
+  "item_acquired": {
+    "subtitle": "Item acquired",
+    "sounds": [
+      {
+        "name": "item_get:item_acquired",
+        "stream": false,
+        "volume": 0.85
+      }
+    ]
+  },
+  "item_acquired_soft": {
+    "subtitle": "Item softly acquired",
+    "sounds": [{ "name": "item_get:item_acquired_soft", "stream": false, "volume": 0.85 }]
+  },
+  "item_acquired_rare": {
+    "subtitle": "Rare item acquired",
+    "sounds": [{ "name": "item_get:item_acquired_rare", "stream": false, "volume": 0.85 }]
+  },
+  "item_acquired_mystic": {
+    "subtitle": "Mystic item acquired",
+    "sounds": [{ "name": "item_get:item_acquired_mystic", "stream": false, "volume": 0.85 }]
+  },
+  "item_acquired_mechanical": {
+    "subtitle": "Mechanical item unlocked",
+    "sounds": [{ "name": "item_get:item_acquired_mechanical", "stream": false, "volume": 0.85 }]
+  },
+  "item_acquired_arcade": {
+    "subtitle": "Arcade item acquired",
+    "sounds": [{ "name": "item_get:item_acquired_arcade", "stream": false, "volume": 0.82 }]
+  },
+  "item_acquired_relic": {
+    "subtitle": "Dark relic acquired",
+    "sounds": [{ "name": "item_get:item_acquired_relic", "stream": false, "volume": 0.88 }]
+  }
+}
