@@ -24,11 +24,12 @@ public final class RuleStore extends SavedData {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String LEGACY_WORLD_DATA = "item_get_rules";
     private static RuleStore global;
+    private static boolean globalFileExists;
     private final List<ReminderRule> rules = new ArrayList<>();
 
     public static synchronized RuleStore get(ServerLevel level) {
         RuleStore store = global();
-        if (store.rules.isEmpty()) {
+        if (store.rules.isEmpty() && !globalFileExists) {
             RuleStore legacy = legacyWorldStore(level);
             if (!legacy.rules.isEmpty()) {
                 store.rules.addAll(legacy.rules);
@@ -62,7 +63,8 @@ public final class RuleStore extends SavedData {
     private static RuleStore loadGlobal() {
         RuleStore store = new RuleStore();
         Path file = rulesFile();
-        if (!Files.exists(file)) return store;
+        globalFileExists = Files.exists(file);
+        if (!globalFileExists) return store;
         try {
             List<ReminderRule> loaded = GSON.fromJson(Files.readString(file, StandardCharsets.UTF_8), LIST);
             if (loaded != null) loaded.stream().filter(java.util.Objects::nonNull).forEach(store.rules::add);
@@ -89,6 +91,7 @@ public final class RuleStore extends SavedData {
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, GSON.toJson(rules), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+            globalFileExists = true;
         } catch (Exception exception) {
             LOGGER.error("Could not save Item Get! global reminder rules to {}", file, exception);
         }
