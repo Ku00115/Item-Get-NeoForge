@@ -45,7 +45,7 @@ public final class EntityPickerScreen extends CrispScreen {
             g.drawString(font, name, width / 2 - 132, y + 6, 0xFFFFFF);
             int available = 256 - font.width(name) - 12;
             if (available > 35) { String visible = font.plainSubstrByWidth(id, available); g.drawString(font, visible, width / 2 + 132 - font.width(visible), y + 6, 0xFFFFFF); }
-        } super.render(g, mx, my, partial);
+        } renderCrispWidgets(g, mx, my, partial);
     }
     @Override public void onClose() { minecraft.setScreen(parent); }
 }

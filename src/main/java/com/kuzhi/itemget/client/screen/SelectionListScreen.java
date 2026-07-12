@@ -21,6 +21,6 @@ public final class SelectionListScreen extends CrispScreen {
     private void filter() { String q=search==null?"":search.getValue().toLowerCase(Locale.ROOT); shown.clear(); for(Entry e:all) if(q.isBlank()||e.id.contains(q)||e.name.toLowerCase(Locale.ROOT).contains(q)) shown.add(e); scroll=0; rows(); }
     private void rows() { rows.forEach(this::removeWidget); rows.clear(); int left=width/2-150, top=53; for(int i=0;i<count()&&scroll+i<shown.size();i++){ Entry e=shown.get(scroll+i); Button b=Button.builder(Component.literal(e.name+"   "+e.id), x->{selected.accept(e.id);minecraft.setScreen(parent);}).bounds(left,top+i*23,300,20).build();rows.add(b);addRenderableWidget(b);} }
     @Override public boolean mouseScrolled(double x,double y,double scrollX,double scrollY){int old=scroll;scroll=Math.max(0,Math.min(Math.max(0,shown.size()-count()),scroll-(int)Math.signum(scrollY)));if(old!=scroll)rows();return true;}
-    @Override public void render(GuiGraphics g,int mx,int my,float p){g.fill(0, 0, width, height, 0x88000000);g.drawCenteredString(font,title,width/2,9,0xFFFFFF);super.render(g,mx,my,p);}
+    @Override public void render(GuiGraphics g,int mx,int my,float p){g.fill(0, 0, width, height, 0x88000000);g.drawCenteredString(font,title,width/2,9,0xFFFFFF);renderCrispWidgets(g,mx,my,p);}
     @Override public void onClose(){minecraft.setScreen(parent);}
 }

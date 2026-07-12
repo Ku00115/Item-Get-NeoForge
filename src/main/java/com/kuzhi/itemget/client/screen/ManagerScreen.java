@@ -90,7 +90,7 @@ public final class ManagerScreen extends CrispScreen {
             g.drawString(font, heading, width / 2 - 175, y + 5, rule.enabled ? 0xFFFFFF : 0x888888);
             g.drawString(font, triggerSummary(rule).getString() + (rule.enabled ? "" : Component.translatable("item_get.manager.disabled_suffix").getString()), width / 2 - 175, y + 17, 0xA0A0A0);
         }
-        super.render(g, mx, my, partial);
+        renderCrispWidgets(g, mx, my, partial);
     }
 
     private int pageSize() { return Math.max(1, (height - LIST_TOP - 56) / 34); }

@@ -61,7 +61,7 @@ public final class SoundPickerScreen extends CrispScreen {
 
     @Override public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) { int old = scroll; scroll = Math.max(0, Math.min(Math.max(0, shown.size() - visibleRows()), scroll - (int)Math.signum(scrollY))); if (old != scroll) rebuildRows(); return true; }
     @Override public void render(GuiGraphics g, int mx, int my, float partial) {
-        g.fill(0, 0, width, height, 0x88000000); g.drawCenteredString(font, title, width / 2, 9, 0xFFFFFF); super.render(g, mx, my, partial);
+        g.fill(0, 0, width, height, 0x88000000); g.drawCenteredString(font, title, width / 2, 9, 0xFFFFFF); renderCrispWidgets(g, mx, my, partial);
         if (!status.isBlank()) g.drawCenteredString(font, status, width / 2, height - 12, 0x999999);
     }
     @Override public void onClose() { minecraft.setScreen(parent); }

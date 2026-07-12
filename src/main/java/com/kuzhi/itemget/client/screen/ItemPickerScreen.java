@@ -58,7 +58,7 @@ public final class ItemPickerScreen extends CrispScreen {
             if (mx >= x && mx < x + 18 && my >= y && my < y + 18) { g.fill(x - 1, y - 1, x + 18, y + 18, 0x80FFFFFF); hover = stack; }
             g.renderItem(stack, x, y);
         }
-        super.render(g, mx, my, partial); if (!hover.isEmpty()) g.renderTooltip(font, hover, mx, my);
+        renderCrispWidgets(g, mx, my, partial); if (!hover.isEmpty()) g.renderTooltip(font, hover, mx, my);
     }
     @Override public void onClose() { minecraft.setScreen(parent); }
 }
