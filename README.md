@@ -20,6 +20,8 @@ This repository contains the NeoForge edition. The Forge 1.20.1 edition is maint
 
 Press `I` by default to open the reminder manager. The manager is editable by operators in multiplayer. The reminder close key defaults to `R`; both keys can be changed in Minecraft's controls screen.
 
+Reminder rules are saved globally in `config/item_get/rules.json`, so modpack authors can create them once and have them apply to every world. Per-player trigger progress is still stored per world/player.
+
 Custom sounds can be placed in:
 
 ```text
