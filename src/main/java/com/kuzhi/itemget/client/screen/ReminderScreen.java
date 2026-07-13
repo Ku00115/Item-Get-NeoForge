@@ -14,7 +14,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 public final class ReminderScreen extends Screen {
     private static final ResourceLocation ITEM_GLOW=ResourceLocation.fromNamespaceAndPath("item_get","textures/gui/item_glow.png");
     private final ReminderRule rule; private final Screen returnTo; private int ticks; private boolean soundPlayed; private long openedAt=-1L;private int descriptionScroll,maxDescriptionScroll;
-    public ReminderScreen(ReminderRule rule,Screen returnTo){super(Component.literal(rule.title==null?"":rule.title));this.rule=rule;this.returnTo=returnTo;}
+    public ReminderScreen(ReminderRule rule,Screen returnTo){super(TranslatedText.component(rule.title));this.rule=rule;this.returnTo=returnTo;}
     @Override protected void init(){if(openedAt<0)openedAt=Util.getMillis();if(!soundPlayed){soundPlayed=true;if(rule.sound!=null&&!rule.sound.isBlank())AudioHelper.play(rule.sound);}}
     @Override public void tick(){ticks++;}
     @Override public boolean isPauseScreen(){return rule.pauseSingleplayer&&minecraft!=null&&minecraft.hasSingleplayerServer();}
@@ -31,7 +31,7 @@ public final class ReminderScreen extends Screen {
         var lines=font.split(Component.literal(visibleDescription(time)),textWidth);
         float panelFade=fade(time,0,260);pushScale(g,cx,cy,scale);softPanel(g,left,top,right,bottom,panelFade);
         glow(g,iconX,cy-3,82,panelFade);var stack=ManagerScreen.displayStack(rule);g.pose().pushPose();g.pose().translate(iconX,cy-3,0);g.pose().scale(2.7F,2.7F,1);g.renderItem(stack,-8,-8);g.pose().popPose();
-        float headingFade=fade(time,160,280);drawCentered(g,rule.title,textCenter,top+14,0xFFE9B0,headingFade);drawCentered(g,ManagerScreen.triggerSummary(rule),textCenter,top+32,0xFFFFFF,headingFade);
+        float headingFade=fade(time,160,280);drawCentered(g,TranslatedText.resolve(rule.title),textCenter,top+14,0xFFE9B0,headingFade);drawCentered(g,ManagerScreen.triggerSummary(rule),textCenter,top+32,0xFFFFFF,headingFade);
         drawDescription(g,lines,textCenter,top+48,4,right-7,time);
         float closeFade=fade(time,closeStart(),280);if(closeFade>=.04F)drawCentered(g,Component.translatable("item_get.continue",ClientEvents.CLOSE.getTranslatedKeyMessage()),textCenter,bottom-13,0x9099A2,closeFade);g.pose().popPose();
     }
@@ -44,7 +44,7 @@ public final class ReminderScreen extends Screen {
     private void drawCentered(GuiGraphics g,Component text,int x,int y,int rgb,float alpha){if(alpha<=0)return;g.drawCenteredString(font,text,x,y,color(rgb,alpha));}
     private void drawCentered(GuiGraphics g,FormattedCharSequence text,int x,int y,int rgb,float alpha){if(alpha<=0)return;g.drawCenteredString(font,text,x,y,color(rgb,alpha));}
     private long elapsed(){return openedAt<0?0:Math.max(0,Util.getMillis()-openedAt);}private static float clamp(float value){return Math.max(0,Math.min(1,value));}
-    private String fullDescription(){return rule.description==null?"":rule.description;}private float typewriterDuration(){return Math.max(260,Math.min(2400,fullDescription().length()*14F));}private float typewriterEnd(){return 360+typewriterDuration();}private float closeStart(){return typewriterEnd()+180;}
+    private String fullDescription(){return TranslatedText.resolve(rule.description);}private float typewriterDuration(){return Math.max(260,Math.min(2400,fullDescription().length()*14F));}private float typewriterEnd(){return 360+typewriterDuration();}private float closeStart(){return typewriterEnd()+180;}
     private String visibleDescription(float time){String full=fullDescription();if(full.isEmpty())return full;int count=(int)(full.length()*clamp((time-360)/typewriterDuration()));return full.substring(0,Math.min(full.length(),count));}
     private static int color(int rgb,float alpha){return(((int)(255*clamp(alpha)))<<24)|(rgb&0xFFFFFF);}private static float fade(float time,float start,float duration){float p=clamp((time-start)/duration);return p*p*(3-2*p);}
 }

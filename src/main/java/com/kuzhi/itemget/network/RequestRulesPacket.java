@@ -20,6 +20,8 @@ public record RequestRulesPacket() implements CustomPacketPayload {
         if (context.player() instanceof ServerPlayer player) PacketDistributor.sendToPlayer(player,
                 new SyncRulesPacket(RuleJson.write(RuleStore.get(player.serverLevel()).rules()), player.hasPermissions(2),
                         player.serverLevel().registryAccess().registryOrThrow(Registries.BIOME).keySet().stream().map(Object::toString).sorted().collect(Collectors.joining("\n")),
-                        player.serverLevel().registryAccess().registryOrThrow(Registries.STRUCTURE).keySet().stream().map(Object::toString).sorted().collect(Collectors.joining("\n"))));
+                        player.serverLevel().registryAccess().registryOrThrow(Registries.STRUCTURE).keySet().stream().map(Object::toString).sorted().collect(Collectors.joining("\n")),
+                        player.serverLevel().registryAccess().registryOrThrow(Registries.DAMAGE_TYPE).entrySet().stream().map(e -> e.getKey().location() + "\t" + e.getValue().msgId()).sorted().collect(Collectors.joining("\n")),
+                        player.server.getAdvancements().getAllAdvancements().stream().map(a -> a.id() + "\t" + a.value().display().map(display -> display.getTitle().getString()).orElse(a.id().toString())).sorted().collect(Collectors.joining("\n"))));
     }
 }

@@ -1,11 +1,15 @@
 package com.kuzhi.itemget;
 
 import com.kuzhi.itemget.network.ItemGetNetwork;
+import com.kuzhi.itemget.network.RuleJson;
 import com.kuzhi.itemget.network.ShowReminderPacket;
 import com.kuzhi.itemget.rule.ReminderRule;
 import com.kuzhi.itemget.rule.RuleStore;
 import com.kuzhi.itemget.rule.TriggerType;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.core.registries.Registries;
@@ -16,6 +20,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.player.AdvancementEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -54,12 +59,12 @@ public final class ServerEvents {
                 String item = rule.target(); int netGain = inventoryInitialized ? Math.max(0, current.getOrDefault(item, 0) - previous.getInt(item)) : 0;
                 int gained = Math.max(0, netGain - credited.getInt(item));
                 if (gained > 0) totals.putInt(rule.id, totals.getInt(rule.id) + gained);
-                if (totals.getInt(rule.id) >= rule.threshold()) fire(player, rule, shown);
+                if (totals.getInt(rule.id) >= rule.threshold()) fire(player, rule, data, shown);
             } else if (type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE) {
                 boolean inside = type == TriggerType.ENTER_BIOME ? biomeMatches(player, rule) : inStructure(player, text(rule,"structure","minecraft:village_plains"));
                 boolean initialized = conditionStates.contains(rule.id), wasInside = conditionStates.getBoolean(rule.id); conditionStates.putBoolean(rule.id, inside);
-                if (initialized && inside && !wasInside) fire(player,rule,shown);
-            } else if (type != TriggerType.ENTITY_KILLED && stateMatches(player, rule, type)) fire(player, rule, shown);
+                if (initialized && inside && !wasInside) fire(player,rule,data,shown);
+            } else if (type != TriggerType.ENTITY_KILLED && type != TriggerType.DEATH_BY && type != TriggerType.ADVANCEMENT_DONE && stateMatches(player, rule, type)) fire(player, rule, data, shown);
         }
         CompoundTag snapshot = new CompoundTag();
         current.forEach(snapshot::putInt);
@@ -90,14 +95,25 @@ public final class ServerEvents {
         for (ReminderRule rule : RuleStore.get(player.serverLevel()).rules()) {
             if (!rule.enabled || TriggerType.parse(rule.triggerType) != TriggerType.ITEM_ACQUIRED || !rule.target().equals(id)) continue;
             prepareRevision(rule, shown, totals, states, revisions); if (hasShown(rule, shown)) continue;
-            totals.putInt(rule.id, totals.getInt(rule.id) + amount); if (totals.getInt(rule.id) >= rule.threshold()) fire(player, rule, shown);
+            totals.putInt(rule.id, totals.getInt(rule.id) + amount); if (totals.getInt(rule.id) >= rule.threshold()) fire(player, rule, data, shown);
         }
         data.put("totals", totals); data.put("shown", shown); data.put("credited_gains", credited); data.put("condition_states", states); data.put("rule_revisions", revisions); player.getPersistentData().put(DATA, data);
     }
 
-    private static void fire(ServerPlayer player, ReminderRule rule, CompoundTag shown) {
-        shown.putInt(rule.id, revision(rule)); PacketDistributor.sendToPlayer(player, new ShowReminderPacket(rule));
+    private static void fire(ServerPlayer player, ReminderRule rule, CompoundTag data, CompoundTag shown) {
+        shown.putInt(rule.id, revision(rule)); recordHistory(data, rule); PacketDistributor.sendToPlayer(player, new ShowReminderPacket(rule));
         LOGGER.info("Item Get! triggered rule {} ({}) for {}", rule.id, rule.triggerType, player.getGameProfile().getName());
+    }
+
+    private static void recordHistory(CompoundTag data, ReminderRule rule) {
+        ListTag history = data.getList("history", Tag.TAG_STRING);
+        String marker = rule.id + "#" + revision(rule);
+        for (Tag tag : history) try {
+            ReminderRule old = RuleJson.GSON.fromJson(tag.getAsString(), ReminderRule.class);
+            if (old != null && marker.equals(old.id + "#" + revision(old))) return;
+        } catch (RuntimeException ignored) {}
+        history.add(StringTag.valueOf(RuleJson.GSON.toJson(rule)));
+        data.put("history", history);
     }
 
     private static boolean stateMatches(ServerPlayer player, ReminderRule rule, TriggerType type) {
@@ -110,7 +126,7 @@ public final class ServerEvents {
             }
             case WEATHER_IS -> switch (text(rule, "weather", "clear")) { case "thunder" -> player.serverLevel().isThundering(); case "rain" -> player.serverLevel().isRaining() && !player.serverLevel().isThundering(); default -> !player.serverLevel().isRaining(); };
             case TIME_IS -> timeMatches(player.serverLevel().getDayTime() % 24000L, text(rule, "time", "day"));
-            case ENTER_BIOME, ENTER_STRUCTURE -> false;
+            case ENTER_BIOME, ENTER_STRUCTURE, DEATH_BY, ADVANCEMENT_DONE -> false;
             default -> false;
         };
     }
@@ -128,7 +144,9 @@ public final class ServerEvents {
 
     @SubscribeEvent
     public void livingDeath(LivingDeathEvent event) {
-        if (event.getEntity().level().isClientSide || !(event.getSource().getEntity() instanceof ServerPlayer player)) return;
+        if (event.getEntity().level().isClientSide) return;
+        if (event.getEntity() instanceof ServerPlayer dead) recordDeath(dead, deathTypeId(event));
+        if (!(event.getSource().getEntity() instanceof ServerPlayer player)) return;
         ResourceLocation killedId = BuiltInRegistries.ENTITY_TYPE.getKey(event.getEntity().getType());
         if (killedId == null) return;
         CompoundTag data = player.getPersistentData().getCompound(DATA);
@@ -143,8 +161,45 @@ public final class ServerEvents {
             if (!target.equals(killedId.toString())) continue;
             totals.putInt(rule.id, totals.getInt(rule.id) + 1);
             if (totals.getInt(rule.id) >= rule.threshold()) {
-                fire(player, rule, shown);
+                fire(player, rule, data, shown);
             }
+        }
+        data.put("totals", totals); data.put("shown", shown); data.put("condition_states", states); data.put("rule_revisions", revisions); player.getPersistentData().put(DATA, data);
+    }
+
+    private static void recordDeath(ServerPlayer player, String deathType) {
+        CompoundTag data = player.getPersistentData().getCompound(DATA);
+        CompoundTag totals = data.getCompound("totals");
+        CompoundTag shown = data.getCompound("shown");
+        CompoundTag states = data.getCompound("condition_states");
+        CompoundTag revisions = data.getCompound("rule_revisions");
+        for (ReminderRule rule : RuleStore.get(player.serverLevel()).rules()) {
+            if (!rule.enabled || TriggerType.parse(rule.triggerType) != TriggerType.DEATH_BY) continue;
+            prepareRevision(rule, shown, totals, states, revisions); if (hasShown(rule, shown)) continue;
+            if (!text(rule, "death", "minecraft:fall").equals(deathType)) continue;
+            fire(player, rule, data, shown);
+        }
+        data.put("totals", totals); data.put("shown", shown); data.put("condition_states", states); data.put("rule_revisions", revisions); player.getPersistentData().put(DATA, data);
+    }
+
+    private static String deathTypeId(LivingDeathEvent event) {
+        return event.getSource().typeHolder().unwrapKey().map(key -> key.location().toString()).orElse(event.getSource().getMsgId());
+    }
+
+    @SubscribeEvent
+    public void advancementEarned(AdvancementEvent.AdvancementEarnEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        String advancement = event.getAdvancement().id().toString();
+        CompoundTag data = player.getPersistentData().getCompound(DATA);
+        CompoundTag totals = data.getCompound("totals");
+        CompoundTag shown = data.getCompound("shown");
+        CompoundTag states = data.getCompound("condition_states");
+        CompoundTag revisions = data.getCompound("rule_revisions");
+        for (ReminderRule rule : RuleStore.get(player.serverLevel()).rules()) {
+            if (!rule.enabled || TriggerType.parse(rule.triggerType) != TriggerType.ADVANCEMENT_DONE) continue;
+            prepareRevision(rule, shown, totals, states, revisions); if (hasShown(rule, shown)) continue;
+            if (!text(rule, "advancement", "minecraft:story/mine_diamond").equals(advancement)) continue;
+            fire(player, rule, data, shown);
         }
         data.put("totals", totals); data.put("shown", shown); data.put("condition_states", states); data.put("rule_revisions", revisions); player.getPersistentData().put(DATA, data);
     }

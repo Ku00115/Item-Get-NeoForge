@@ -10,7 +10,9 @@ public enum TriggerType {
     WEATHER_IS("item_get.trigger.weather_is"),
     TIME_IS("item_get.trigger.time_is"),
     ENTER_BIOME("item_get.trigger.enter_biome"),
-    ENTER_STRUCTURE("item_get.trigger.enter_structure");
+    ENTER_STRUCTURE("item_get.trigger.enter_structure"),
+    DEATH_BY("item_get.trigger.death_by"),
+    ADVANCEMENT_DONE("item_get.trigger.advancement_done");
 
     public final String translationKey;
     TriggerType(String translationKey) { this.translationKey = translationKey; }

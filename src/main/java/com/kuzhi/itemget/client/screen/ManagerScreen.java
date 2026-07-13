@@ -2,6 +2,7 @@ package com.kuzhi.itemget.client.screen;
 
 import com.kuzhi.itemget.network.ItemGetNetwork;
 import com.kuzhi.itemget.network.SaveRulesPacket;
+import com.kuzhi.itemget.client.ClientHooks;
 import com.kuzhi.itemget.rule.ReminderRule;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -86,7 +87,7 @@ public final class ManagerScreen extends CrispScreen {
             ReminderRule rule = rules.get(i);
             boolean holding=i==pressedIndex&&Util.getMillis()-pressedAt>=250;g.fill(width / 2 - 205, y, width / 2 + 205, y + 30, i == selected || selectedMany.contains(i) || holding ? 0xAA405A72 : 0x88303030);
             ItemStack stack = displayStack(rule); g.renderItem(stack, width / 2 - 197, y + 7);
-            String heading = rule.title == null || rule.title.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : rule.title;
+            String heading = rule.title == null || rule.title.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : TranslatedText.resolve(rule.title);
             g.drawString(font, heading, width / 2 - 175, y + 5, rule.enabled ? 0xFFFFFF : 0x888888);
             g.drawString(font, triggerSummary(rule).getString() + (rule.enabled ? "" : Component.translatable("item_get.manager.disabled_suffix").getString()), width / 2 - 175, y + 17, 0xA0A0A0);
         }
@@ -106,17 +107,19 @@ public final class ManagerScreen extends CrispScreen {
             if (!stack.isEmpty()) return stack;
         } catch (Exception ignored) {}
         if (rule.icon != null && !rule.icon.isBlank() && !item(rule.icon).isEmpty()) return item(rule.icon);
-        return switch (TriggerType.parse(rule.triggerType)) { case ITEM_ACQUIRED -> item(rule.target()); case ENTITY_KILLED -> new ItemStack(Items.IRON_SWORD); case HEALTH_AT -> new ItemStack(Items.GLISTERING_MELON_SLICE); case HUNGER_AT -> new ItemStack(Items.BREAD); case EFFECT_GAINED -> new ItemStack(Items.POTION); case WEATHER_IS -> new ItemStack(Items.WATER_BUCKET); case TIME_IS -> new ItemStack(Items.CLOCK); case ENTER_BIOME -> new ItemStack(Items.GRASS_BLOCK); case ENTER_STRUCTURE -> new ItemStack(Items.FILLED_MAP); };
+        return switch (TriggerType.parse(rule.triggerType)) { case ITEM_ACQUIRED -> item(rule.target()); case ENTITY_KILLED -> new ItemStack(Items.IRON_SWORD); case HEALTH_AT -> new ItemStack(Items.GLISTERING_MELON_SLICE); case HUNGER_AT -> new ItemStack(Items.BREAD); case EFFECT_GAINED -> new ItemStack(Items.POTION); case WEATHER_IS -> new ItemStack(Items.WATER_BUCKET); case TIME_IS -> new ItemStack(Items.CLOCK); case ENTER_BIOME -> new ItemStack(Items.GRASS_BLOCK); case ENTER_STRUCTURE -> new ItemStack(Items.FILLED_MAP); case DEATH_BY -> new ItemStack(Items.SKELETON_SKULL); case ADVANCEMENT_DONE -> new ItemStack(Items.WRITABLE_BOOK); };
     }
     static Component targetName(ReminderRule rule) {
         TriggerType type = TriggerType.parse(rule.triggerType);
         if (type == TriggerType.ITEM_ACQUIRED) return item(rule.target()).getHoverName();
         if (type == TriggerType.ENTITY_KILLED) { var entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.tryParse(rule.entityTarget())); return entity == null ? Component.literal(rule.entityTarget()) : entity.getDescription(); }
-        String key = switch(type){case HEALTH_AT,HUNGER_AT->"value";case EFFECT_GAINED->"effect";case WEATHER_IS->"weather";case TIME_IS->"time";case ENTER_BIOME->"biome";case ENTER_STRUCTURE->"structure";default->"";};
+        String key = switch(type){case HEALTH_AT,HUNGER_AT->"value";case EFFECT_GAINED->"effect";case WEATHER_IS->"weather";case TIME_IS->"time";case ENTER_BIOME->"biome";case ENTER_STRUCTURE->"structure";case DEATH_BY->"death";case ADVANCEMENT_DONE->"advancement";default->"";};
         String id = rule.trigger.has(key)?rule.trigger.get(key).getAsString():type.name();
         if(type==TriggerType.EFFECT_GAINED){var effect=BuiltInRegistries.MOB_EFFECT.get(ResourceLocation.tryParse(id));if(effect!=null)return effect.getDisplayName();}
         if(type==TriggerType.WEATHER_IS||type==TriggerType.TIME_IS)return Component.translatable("item_get.choice."+id);
         if(type==TriggerType.ENTER_BIOME||type==TriggerType.ENTER_STRUCTURE){ResourceLocation location=ResourceLocation.tryParse(id);if(location!=null){String prefix=type==TriggerType.ENTER_BIOME?"biome":"structure";String translation=prefix+"."+location.getNamespace()+"."+location.getPath().replace('/','.');if(I18n.exists(translation))return Component.literal(I18n.get(translation));}}
+        if(type==TriggerType.DEATH_BY)return Component.literal(ClientHooks.damageTypeName(id));
+        if(type==TriggerType.ADVANCEMENT_DONE)return Component.literal(ClientHooks.advancementName(id));
         return Component.literal(id);
     }
     static Component triggerSummary(ReminderRule rule) {
