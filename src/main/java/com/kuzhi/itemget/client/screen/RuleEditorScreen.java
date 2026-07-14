@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public final class RuleEditorScreen extends CrispScreen {
+    private static final int TITLE_LIMIT = 120;
+    private static final int DESCRIPTION_LIMIT = 2048;
     private final Screen parent; private final ReminderRule original; private final ReminderRule rule; private final Consumer<ReminderRule> saver;
     private EditBox count, titleBox, description; private int left, panelWidth, top, step;
     public RuleEditorScreen(Screen parent, ReminderRule rule, boolean existing, Consumer<ReminderRule> saver) { super(Component.translatable(existing?"item_get.editor.edit_title":"item_get.editor.create_title"));this.parent=parent;this.original=rule;this.rule=new com.google.gson.Gson().fromJson(new com.google.gson.Gson().toJson(rule),ReminderRule.class);this.saver=saver;if(this.rule.sound==null||this.rule.sound.isBlank())this.rule.sound="item_get:item_acquired"; }
@@ -32,8 +34,8 @@ public final class RuleEditorScreen extends CrispScreen {
         y+=step;
         if(counted()){count=new EditBox(font,left+58,y,62,20,Component.translatable("item_get.editor.count"));count.setValue(Integer.toString(rule.threshold()));addRenderableWidget(count);titleBox=new EditBox(font,left+164,y,panelWidth-164,20,Component.translatable("item_get.editor.title"));}
         else {count=null;titleBox=new EditBox(font,left+58,y,panelWidth-58,20,Component.translatable("item_get.editor.title"));}
-        titleBox.setValue(rule.title==null?"":rule.title);titleBox.setMaxLength(120);addRenderableWidget(titleBox);
-        y+=step;description=new EditBox(font,left+58,y,panelWidth-58,20,Component.translatable("item_get.editor.description"));description.setValue(rule.description==null?"":rule.description);description.setMaxLength(512);addRenderableWidget(description);
+        titleBox.setMaxLength(TITLE_LIMIT);titleBox.setValue(rule.title==null?"":rule.title);addRenderableWidget(titleBox);
+        y+=step;description=new EditBox(font,left+58,y,panelWidth-58,20,Component.translatable("item_get.editor.description"));description.setMaxLength(DESCRIPTION_LIMIT);description.setValue(rule.description==null?"":rule.description);addRenderableWidget(description);
         y+=step;int half=(panelWidth-4)/2;
         addRenderableWidget(Button.builder(Component.translatable("item_get.editor.icon",iconName()),b->{read();minecraft.setScreen(new ItemPickerScreen(this,stack->{rule.icon=BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();rule.iconStack=stack.copyWithCount(1).save(minecraft.level.registryAccess()).toString();minecraft.setScreen(this);}));}).bounds(left,y,half,20).build());
         addRenderableWidget(Button.builder(Component.translatable("item_get.editor.sound"),b->{read();minecraft.setScreen(new SoundPickerScreen(this,id->{rule.sound=id;minecraft.setScreen(this);}));}).bounds(left+half+4,y,half,20).build());
