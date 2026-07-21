@@ -8,10 +8,15 @@ public final class ReminderRule {
     public String triggerType = TriggerType.ITEM_ACQUIRED.name();
     public JsonObject trigger = new JsonObject();
     public String title = "";
+    public String subtitle = "";
     public String description = "";
     public String icon = "";
+    /** Optional image icon name from config/item_get/images. */
+    public String iconImage = "";
     /** Serialized ItemStack used by custom icons; keeps potion, enchantment and other NBT variants. */
     public String iconStack = "";
+    /** Optional Ponder target id, usually an item or block registry id. */
+    public String ponderTarget = "";
     public String displayStyle = "HORIZONTAL";
     public String sound = "item_get:item_acquired";
     /** Reserved for a future optional music system; currently hidden and not played. */

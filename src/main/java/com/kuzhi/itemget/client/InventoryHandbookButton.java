@@ -45,6 +45,10 @@ public final class InventoryHandbookButton extends AbstractWidget {
         RenderSystem.disableBlend();
     }
 
+    public static void renderCurrent(Screen screen, GuiGraphics g, int mx, int my, float partial) {
+        if (current != null && screen instanceof InventoryScreen) current.renderWidget(g, mx, my, partial);
+    }
+
     @Override public boolean mouseClicked(double x, double y, int button) {
         return begin(x, y, button);
     }
@@ -96,8 +100,9 @@ public final class InventoryHandbookButton extends AbstractWidget {
             dragging = false;
             ClientHooks.setInventoryButtonPosition(getX(), getY());
             ItemGetNetwork.saveUiLayout(getX(), getY());
-        } else if (clicked(x, y)) {
+        } else if (contains(x, y)) {
             ItemGetNetwork.requestHistory();
+            ClientHooks.openCachedHandbook();
         }
         return true;
     }

@@ -12,7 +12,10 @@ public enum TriggerType {
     ENTER_BIOME("item_get.trigger.enter_biome"),
     ENTER_STRUCTURE("item_get.trigger.enter_structure"),
     DEATH_BY("item_get.trigger.death_by"),
-    ADVANCEMENT_DONE("item_get.trigger.advancement_done");
+    ADVANCEMENT_DONE("item_get.trigger.advancement_done"),
+    OBSERVE_BLOCK("item_get.trigger.observe_block"),
+    OBSERVE_ENTITY("item_get.trigger.observe_entity"),
+    HOVER_ITEM("item_get.trigger.hover_item");
 
     public final String translationKey;
     TriggerType(String translationKey) { this.translationKey = translationKey; }

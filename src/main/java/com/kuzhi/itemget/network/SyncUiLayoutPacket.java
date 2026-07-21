@@ -14,5 +14,7 @@ public record SyncUiLayoutPacket(int x, int y) implements CustomPacketPayload {
             (buf, msg) -> { buf.writeVarInt(msg.x); buf.writeVarInt(msg.y); },
             buf -> new SyncUiLayoutPacket(buf.readVarInt(), buf.readVarInt()));
     @Override public Type<SyncUiLayoutPacket> type() { return TYPE; }
-    public static void handle(SyncUiLayoutPacket packet, IPayloadContext context) { ClientHooks.setInventoryButtonPosition(packet.x, packet.y); }
+    public static void handle(SyncUiLayoutPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> ClientHooks.setInventoryButtonPosition(packet.x, packet.y));
+    }
 }

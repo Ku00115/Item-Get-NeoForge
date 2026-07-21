@@ -15,9 +15,11 @@ public record RequestUiLayoutPacket() implements CustomPacketPayload {
     public static final StreamCodec<RegistryFriendlyByteBuf, RequestUiLayoutPacket> STREAM_CODEC = StreamCodec.unit(new RequestUiLayoutPacket());
     @Override public Type<RequestUiLayoutPacket> type() { return TYPE; }
     public static void handle(RequestUiLayoutPacket packet, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player) {
-            UiLayoutStore store = UiLayoutStore.get(player.serverLevel());
-            PacketDistributor.sendToPlayer(player, new SyncUiLayoutPacket(store.inventoryButtonX(), store.inventoryButtonY()));
-        }
+        context.enqueueWork(() -> {
+            if (context.player() instanceof ServerPlayer player) {
+                UiLayoutStore store = UiLayoutStore.get(player.serverLevel());
+                PacketDistributor.sendToPlayer(player, new SyncUiLayoutPacket(store.inventoryButtonX(), store.inventoryButtonY()));
+            }
+        });
     }
 }

@@ -7,16 +7,18 @@ public final class ItemGetNetwork {
     private ItemGetNetwork() {}
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("5");
+        var registrar = event.registrar("6");
         registrar.playToServer(RequestRulesPacket.TYPE, RequestRulesPacket.STREAM_CODEC, RequestRulesPacket::handle);
         registrar.playToServer(SaveRulesPacket.TYPE, SaveRulesPacket.STREAM_CODEC, SaveRulesPacket::handle);
         registrar.playToServer(RequestHistoryPacket.TYPE, RequestHistoryPacket.STREAM_CODEC, RequestHistoryPacket::handle);
         registrar.playToServer(RequestUiLayoutPacket.TYPE, RequestUiLayoutPacket.STREAM_CODEC, RequestUiLayoutPacket::handle);
         registrar.playToServer(SaveUiLayoutPacket.TYPE, SaveUiLayoutPacket.STREAM_CODEC, SaveUiLayoutPacket::handle);
+        registrar.playToServer(TriggerObservedPacket.TYPE, TriggerObservedPacket.STREAM_CODEC, TriggerObservedPacket::handle);
         registrar.playToClient(SyncRulesPacket.TYPE, SyncRulesPacket.STREAM_CODEC, SyncRulesPacket::handle);
         registrar.playToClient(ShowReminderPacket.TYPE, ShowReminderPacket.STREAM_CODEC, ShowReminderPacket::handle);
         registrar.playToClient(SyncHistoryPacket.TYPE, SyncHistoryPacket.STREAM_CODEC, SyncHistoryPacket::handle);
         registrar.playToClient(SyncUiLayoutPacket.TYPE, SyncUiLayoutPacket.STREAM_CODEC, SyncUiLayoutPacket::handle);
+        registrar.playToClient(SyncObserverRulesPacket.TYPE, SyncObserverRulesPacket.STREAM_CODEC, SyncObserverRulesPacket::handle);
     }
 
     public static void requestRules() { PacketDistributor.sendToServer(new RequestRulesPacket()); }
@@ -24,4 +26,5 @@ public final class ItemGetNetwork {
     public static void requestUiLayout() { PacketDistributor.sendToServer(new RequestUiLayoutPacket()); }
     public static void saveUiLayout(int x, int y) { PacketDistributor.sendToServer(new SaveUiLayoutPacket(x, y)); }
     public static void saveRules(SaveRulesPacket packet) { PacketDistributor.sendToServer(packet); }
+    public static void triggerObserved(String ruleId) { PacketDistributor.sendToServer(new TriggerObservedPacket(ruleId)); }
 }

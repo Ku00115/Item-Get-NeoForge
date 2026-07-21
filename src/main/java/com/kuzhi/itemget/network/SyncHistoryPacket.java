@@ -12,5 +12,7 @@ public record SyncHistoryPacket(String json) implements CustomPacketPayload {
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncHistoryPacket> STREAM_CODEC = StreamCodec.of(
             (buf, msg) -> buf.writeUtf(msg.json, 1048576), buf -> new SyncHistoryPacket(buf.readUtf(1048576)));
     @Override public Type<SyncHistoryPacket> type() { return TYPE; }
-    public static void handle(SyncHistoryPacket packet, IPayloadContext context) { com.kuzhi.itemget.client.ClientHooks.openHandbook(RuleJson.read(packet.json)); }
+    public static void handle(SyncHistoryPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> com.kuzhi.itemget.client.ClientHooks.openHandbook(RuleJson.read(packet.json)));
+    }
 }

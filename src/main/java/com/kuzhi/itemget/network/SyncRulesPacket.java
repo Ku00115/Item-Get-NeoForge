@@ -14,5 +14,7 @@ public record SyncRulesPacket(String json, boolean editable, String biomes, Stri
             (buf, msg) -> { buf.writeUtf(msg.json, 1048576); buf.writeBoolean(msg.editable); buf.writeUtf(msg.biomes, 1048576); buf.writeUtf(msg.structures, 1048576); buf.writeUtf(msg.damageTypes, 1048576); buf.writeUtf(msg.advancements, 1048576); },
             buf -> new SyncRulesPacket(buf.readUtf(1048576), buf.readBoolean(), buf.readUtf(1048576), buf.readUtf(1048576), buf.readUtf(1048576), buf.readUtf(1048576)));
     @Override public Type<SyncRulesPacket> type() { return TYPE; }
-    public static void handle(SyncRulesPacket packet, IPayloadContext context) { ClientHooks.openManager(RuleJson.read(packet.json), packet.editable, packet.biomes, packet.structures, packet.damageTypes, packet.advancements); }
+    public static void handle(SyncRulesPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> ClientHooks.openManager(RuleJson.read(packet.json), packet.editable, packet.biomes, packet.structures, packet.damageTypes, packet.advancements));
+    }
 }

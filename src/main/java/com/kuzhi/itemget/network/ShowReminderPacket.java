@@ -15,5 +15,7 @@ public record ShowReminderPacket(String json) implements CustomPacketPayload {
             (buf, msg) -> buf.writeUtf(msg.json, 65535), buf -> new ShowReminderPacket(buf.readUtf(65535)));
     public ShowReminderPacket(ReminderRule rule) { this(RuleJson.GSON.toJson(rule)); }
     @Override public Type<ShowReminderPacket> type() { return TYPE; }
-    public static void handle(ShowReminderPacket packet, IPayloadContext context) { ClientHooks.show(RuleJson.GSON.fromJson(packet.json, ReminderRule.class)); }
+    public static void handle(ShowReminderPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> ClientHooks.show(RuleJson.GSON.fromJson(packet.json, ReminderRule.class)));
+    }
 }

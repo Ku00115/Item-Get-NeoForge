@@ -17,11 +17,13 @@ public record SaveUiLayoutPacket(int x, int y) implements CustomPacketPayload {
             buf -> new SaveUiLayoutPacket(buf.readVarInt(), buf.readVarInt()));
     @Override public Type<SaveUiLayoutPacket> type() { return TYPE; }
     public static void handle(SaveUiLayoutPacket packet, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player) {
-            int x = Math.max(-1, Math.min(4096, packet.x));
-            int y = Math.max(-1, Math.min(4096, packet.y));
-            UiLayoutStore.get(player.serverLevel()).setInventoryButton(x, y);
-            PacketDistributor.sendToPlayer(player, new SyncUiLayoutPacket(x, y));
-        }
+        context.enqueueWork(() -> {
+            if (context.player() instanceof ServerPlayer player) {
+                int x = Math.max(-1, Math.min(4096, packet.x));
+                int y = Math.max(-1, Math.min(4096, packet.y));
+                UiLayoutStore.get(player.serverLevel()).setInventoryButton(x, y);
+                PacketDistributor.sendToPlayer(player, new SyncUiLayoutPacket(x, y));
+            }
+        });
     }
 }

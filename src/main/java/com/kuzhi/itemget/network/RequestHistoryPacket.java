@@ -22,7 +22,9 @@ public record RequestHistoryPacket() implements CustomPacketPayload {
     public static final StreamCodec<RegistryFriendlyByteBuf, RequestHistoryPacket> STREAM_CODEC = StreamCodec.unit(new RequestHistoryPacket());
     @Override public Type<RequestHistoryPacket> type() { return TYPE; }
     public static void handle(RequestHistoryPacket packet, IPayloadContext context) {
-        if (context.player() instanceof ServerPlayer player) PacketDistributor.sendToPlayer(player, new SyncHistoryPacket(RuleJson.write(history(player))));
+        context.enqueueWork(() -> {
+            if (context.player() instanceof ServerPlayer player) PacketDistributor.sendToPlayer(player, new SyncHistoryPacket(RuleJson.write(history(player))));
+        });
     }
 
     private static List<ReminderRule> history(ServerPlayer player) {
