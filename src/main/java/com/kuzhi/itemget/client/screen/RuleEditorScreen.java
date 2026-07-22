@@ -632,20 +632,37 @@ public final class RuleEditorScreen extends CrispScreen {
     private int maxDescScroll() { return Math.max(0, descLines().size() - descVisibleLines()); }
     private void drawDescriptionBox(GuiGraphics g) {
         int x = descX(), y = descY(), w = descW(), h = descH();
-        g.fill(x, y, x + w, y + h, descFocused ? 0xAA050505 : 0x88050505);
-        g.fill(x, y, x + w, y + 1, descFocused ? 0xFFE0E0FF : 0xAA9A9A9A);
-        g.fill(x, y + h - 1, x + w, y + h, descFocused ? 0xFFE0E0FF : 0xAA9A9A9A);
-        g.fill(x, y, x + 1, y + h, descFocused ? 0xFFE0E0FF : 0xAA9A9A9A);
-        g.fill(x + w - 1, y, x + w, y + h, descFocused ? 0xFFE0E0FF : 0xAA9A9A9A);
+        int border = descFocused ? 0xFFFFFFFF : 0xFFA0A0A0;
+        g.fill(x, y, x + w, y + h, 0xAA000000);
+        g.fill(x, y, x + w, y + 1, border);
+        g.fill(x, y + h - 1, x + w, y + h, border);
+        g.fill(x, y, x + 1, y + h, border);
+        g.fill(x + w - 1, y, x + w, y + h, border);
         List<net.minecraft.util.FormattedCharSequence> lines = descLines();
         descScroll = Math.max(0, Math.min(maxDescScroll(), descScroll));
         int count = Math.min(descVisibleLines(), Math.max(0, lines.size() - descScroll));
         for (int i = 0; i < count; i++) g.drawString(font, lines.get(descScroll + i), x + 4, y + 4 + i * 11, rule.description == null || rule.description.isBlank() ? 0x7F8FA0 : 0xD0D7DF, false);
+        drawDescriptionCaret(g, x, y, w);
         if (maxDescScroll() > 0) {
             int track = h - 6, thumb = Math.max(10, track * descVisibleLines() / lines.size()), thumbY = y + 3 + (track - thumb) * descScroll / maxDescScroll();
             g.fill(x + w - 4, y + 3, x + w - 3, y + h - 3, 0x55FFFFFF);
             g.fill(x + w - 5, thumbY, x + w - 2, thumbY + thumb, 0xAAFFFFFF);
         }
+    }
+
+    private void drawDescriptionCaret(GuiGraphics g, int x, int y, int w) {
+        if (!descFocused || (Util.getMillis() / 300L) % 2L != 0L) return;
+        String text = rule.description == null ? "" : rule.description;
+        if (text.isBlank()) {
+            g.drawString(font, "_", x + 4, y + 4, 0xD0D7DF, false);
+            return;
+        }
+        List<net.minecraft.util.FormattedCharSequence> lines = font.split(Component.literal(text), w - 8);
+        int lineIndex = lines.size() - 1 - descScroll;
+        if (lineIndex < 0 || lineIndex >= descVisibleLines()) return;
+        String lastRawLine = text.substring(Math.max(0, text.lastIndexOf('\n') + 1));
+        int caretX = x + 4 + Math.min(font.width(lastRawLine), w - 14);
+        g.drawString(font, "_", caretX, y + 4 + lineIndex * 11, 0xD0D7DF, false);
     }
 
     private void drawPanel(GuiGraphics g, int left, int top, int right, int bottom) {
