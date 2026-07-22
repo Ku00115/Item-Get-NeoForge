@@ -169,7 +169,12 @@ public final class RuleEditorScreen extends CrispScreen {
         if (button == 0) {
             if (section == Section.BASIC) {
                 descFocused = descHit(x, y);
-                if (descFocused) return true;
+                if (descFocused) {
+                    if (titleBox != null) titleBox.setFocused(false);
+                    if (subtitleBox != null) subtitleBox.setFocused(false);
+                    setFocused(null);
+                    return true;
+                }
             }
             int hit = navAt(x, y);
             if (hit >= 0) {

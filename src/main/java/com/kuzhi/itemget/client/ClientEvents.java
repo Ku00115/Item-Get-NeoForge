@@ -6,7 +6,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.commands.Commands;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
@@ -52,6 +54,12 @@ public final class ClientEvents {
             ObservationTracker.captureHoveredItem(event.getScreen());
             InventoryHandbookButton.renderCurrent(event.getScreen(), event.getGuiGraphics(), event.getMouseX(), event.getMouseY(), event.getPartialTick());
             SideReminderOverlay.render(event.getGuiGraphics(), event.getPartialTick());
+        }
+
+        @SubscribeEvent public static void commands(RegisterClientCommandsEvent event) {
+            event.getDispatcher().register(Commands.literal("itemget")
+                    .then(Commands.literal("handbook").executes(ctx -> { openHandbook(); return 1; }))
+                    .then(Commands.literal("manager").executes(ctx -> { ItemGetNetwork.requestRules(); return 1; })));
         }
 
         @SubscribeEvent public static void screenInit(ScreenEvent.Init.Post event) {
