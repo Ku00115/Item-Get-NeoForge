@@ -11,11 +11,13 @@ public enum TriggerType {
     TIME_IS("item_get.trigger.time_is"),
     ENTER_BIOME("item_get.trigger.enter_biome"),
     ENTER_STRUCTURE("item_get.trigger.enter_structure"),
+    DIMENSION_CHANGED("item_get.trigger.dimension_changed"),
     DEATH_BY("item_get.trigger.death_by"),
     ADVANCEMENT_DONE("item_get.trigger.advancement_done"),
     OBSERVE_BLOCK("item_get.trigger.observe_block"),
     OBSERVE_ENTITY("item_get.trigger.observe_entity"),
-    HOVER_ITEM("item_get.trigger.hover_item");
+    HOVER_ITEM("item_get.trigger.hover_item"),
+    MANUAL("item_get.trigger.manual");
 
     public final String translationKey;
     TriggerType(String translationKey) { this.translationKey = translationKey; }

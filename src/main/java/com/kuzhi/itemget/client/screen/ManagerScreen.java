@@ -203,7 +203,7 @@ public final class ManagerScreen extends CrispScreen {
         if (rule.icon != null && !rule.icon.isBlank() && !item(rule.icon).isEmpty()) return item(rule.icon);
         TriggerType type = TriggerType.parse(rule.triggerType);
         if (type == TriggerType.ITEM_ACQUIRED || type == TriggerType.HOVER_ITEM) return triggerStack(rule, item(rule.target()));
-        return switch (type) { case ITEM_ACQUIRED -> item(rule.target()); case ENTITY_KILLED -> new ItemStack(Items.IRON_SWORD); case HEALTH_AT -> new ItemStack(Items.GLISTERING_MELON_SLICE); case HUNGER_AT -> new ItemStack(Items.BREAD); case EFFECT_GAINED -> new ItemStack(Items.POTION); case WEATHER_IS -> new ItemStack(Items.WATER_BUCKET); case TIME_IS -> new ItemStack(Items.CLOCK); case ENTER_BIOME -> new ItemStack(Items.GRASS_BLOCK); case ENTER_STRUCTURE -> new ItemStack(Items.FILLED_MAP); case DEATH_BY -> new ItemStack(Items.SKELETON_SKULL); case ADVANCEMENT_DONE -> new ItemStack(Items.WRITABLE_BOOK); case OBSERVE_BLOCK -> item(rule.trigger.has("block") ? rule.trigger.get("block").getAsString() : "minecraft:oak_log"); case OBSERVE_ENTITY -> new ItemStack(Items.SPYGLASS); case HOVER_ITEM -> item(rule.target()); };
+        return switch (type) { case ITEM_ACQUIRED -> item(rule.target()); case ENTITY_KILLED -> new ItemStack(Items.IRON_SWORD); case HEALTH_AT -> new ItemStack(Items.GLISTERING_MELON_SLICE); case HUNGER_AT -> new ItemStack(Items.BREAD); case EFFECT_GAINED -> new ItemStack(Items.POTION); case WEATHER_IS -> new ItemStack(Items.WATER_BUCKET); case TIME_IS -> new ItemStack(Items.CLOCK); case ENTER_BIOME -> new ItemStack(Items.GRASS_BLOCK); case ENTER_STRUCTURE -> new ItemStack(Items.FILLED_MAP); case DIMENSION_CHANGED -> new ItemStack(Items.COMPASS); case DEATH_BY -> new ItemStack(Items.SKELETON_SKULL); case ADVANCEMENT_DONE -> new ItemStack(Items.WRITABLE_BOOK); case OBSERVE_BLOCK -> item(rule.trigger.has("block") ? rule.trigger.get("block").getAsString() : "minecraft:oak_log"); case OBSERVE_ENTITY -> new ItemStack(Items.SPYGLASS); case HOVER_ITEM -> item(rule.target()); case MANUAL -> new ItemStack(Items.COMMAND_BLOCK); };
     }
     static Component targetName(ReminderRule rule) {
         TriggerType type = TriggerType.parse(rule.triggerType);
@@ -212,13 +212,15 @@ public final class ManagerScreen extends CrispScreen {
         if (type == TriggerType.OBSERVE_BLOCK) return item(rule.trigger.has("block") ? rule.trigger.get("block").getAsString() : "minecraft:oak_log").getHoverName();
         if (type == TriggerType.OBSERVE_ENTITY) { var entity = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.tryParse(rule.entityTarget())); return entity == null ? Component.literal(rule.entityTarget()) : entity.getDescription(); }
         if (type == TriggerType.HOVER_ITEM) return triggerStack(rule, item(rule.target())).getHoverName();
-        String key = switch(type){case HEALTH_AT,HUNGER_AT->"value";case EFFECT_GAINED->"effect";case WEATHER_IS->"weather";case TIME_IS->"time";case ENTER_BIOME->"biome";case ENTER_STRUCTURE->"structure";case DEATH_BY->"death";case ADVANCEMENT_DONE->"advancement";default->"";};
+        String key = switch(type){case HEALTH_AT,HUNGER_AT->"value";case EFFECT_GAINED->"effect";case WEATHER_IS->"weather";case TIME_IS->"time";case ENTER_BIOME->"biome";case ENTER_STRUCTURE->"structure";case DIMENSION_CHANGED->"dimension";case DEATH_BY->"death";case ADVANCEMENT_DONE->"advancement";case MANUAL->"manual";default->"";};
         String id = rule.trigger.has(key)?rule.trigger.get(key).getAsString():type.name();
         if(type==TriggerType.EFFECT_GAINED){var effect=BuiltInRegistries.MOB_EFFECT.get(ResourceLocation.tryParse(id));if(effect!=null)return effect.getDisplayName();}
         if(type==TriggerType.WEATHER_IS||type==TriggerType.TIME_IS)return Component.translatable("item_get.choice."+id);
         if(type==TriggerType.ENTER_BIOME||type==TriggerType.ENTER_STRUCTURE){ResourceLocation location=ResourceLocation.tryParse(id);if(location!=null){String prefix=type==TriggerType.ENTER_BIOME?"biome":"structure";String translation=prefix+"."+location.getNamespace()+"."+location.getPath().replace('/','.');if(I18n.exists(translation))return Component.literal(I18n.get(translation));}}
+        if(type==TriggerType.DIMENSION_CHANGED){ResourceLocation location=ResourceLocation.tryParse(id);if(location!=null){String translation="dimension."+location.getNamespace()+"."+location.getPath().replace('/','.');if(I18n.exists(translation))return Component.literal(I18n.get(translation));}}
         if(type==TriggerType.DEATH_BY)return Component.literal(ClientHooks.damageTypeName(id));
         if(type==TriggerType.ADVANCEMENT_DONE)return Component.literal(ClientHooks.advancementName(id));
+        if(type==TriggerType.MANUAL)return Component.literal(id);
         return Component.literal(id);
     }
     public static Component triggerSummary(ReminderRule rule) {
@@ -266,7 +268,7 @@ public final class ManagerScreen extends CrispScreen {
                 case ALL -> true;
                 case ITEMS -> type == TriggerType.ITEM_ACQUIRED;
                 case ENTITY -> type == TriggerType.ENTITY_KILLED || type == TriggerType.OBSERVE_ENTITY;
-                case WORLD -> type == TriggerType.WEATHER_IS || type == TriggerType.TIME_IS || type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE;
+                case WORLD -> type == TriggerType.WEATHER_IS || type == TriggerType.TIME_IS || type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE || type == TriggerType.DIMENSION_CHANGED || type == TriggerType.MANUAL;
                 case PLAYER -> type == TriggerType.HEALTH_AT || type == TriggerType.HUNGER_AT || type == TriggerType.EFFECT_GAINED || type == TriggerType.DEATH_BY || type == TriggerType.OBSERVE_BLOCK || type == TriggerType.HOVER_ITEM;
                 case ADVANCEMENT -> type == TriggerType.ADVANCEMENT_DONE;
                 case PONDER -> ClientHooks.hasPonderScene(rule.ponderTarget);

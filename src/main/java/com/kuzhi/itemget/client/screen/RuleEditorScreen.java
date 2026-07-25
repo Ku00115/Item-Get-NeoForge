@@ -267,11 +267,13 @@ public final class RuleEditorScreen extends CrispScreen {
             case TIME_IS -> openEntries(tr("item_get.editor.choose_time"), List.of(entry("day", choiceName("day")), entry("noon", choiceName("noon")), entry("night", choiceName("night")), entry("midnight", choiceName("midnight"))), id -> c.data.addProperty("time", id));
             case ENTER_BIOME -> openEntries(tr("item_get.editor.choose_biome"), catalog(ClientHooks.biomes(), "biome"), id -> c.data.addProperty("biome", id));
             case ENTER_STRUCTURE -> openEntries(tr("item_get.editor.choose_structure"), catalog(ClientHooks.structures(), "structure"), id -> c.data.addProperty("structure", id));
+            case DIMENSION_CHANGED -> openEntries(tr("item_get.editor.choose_dimension"), dimensions(), id -> c.data.addProperty("dimension", id));
             case DEATH_BY -> openEntries(tr("item_get.editor.choose_death"), namedCatalog(ClientHooks.damageTypes(), ClientHooks::damageTypeName), id -> c.data.addProperty("death", id));
             case ADVANCEMENT_DONE -> openEntries(tr("item_get.editor.choose_advancement"), namedCatalog(ClientHooks.advancements(), ClientHooks::advancementName), id -> c.data.addProperty("advancement", id));
             case OBSERVE_BLOCK -> minecraft.setScreen(new ItemPickerScreen(this, stack -> { c.data.addProperty("block", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()); minecraft.setScreen(this); }));
             case OBSERVE_ENTITY -> minecraft.setScreen(new EntityPickerScreen(this, id -> { c.data.addProperty("entity", id); minecraft.setScreen(this); }));
             case HOVER_ITEM -> minecraft.setScreen(new ItemPickerScreen(this, stack -> { setItemTarget(c.data, "item", stack, true); minecraft.setScreen(this); }));
+            case MANUAL -> {}
         }
     }
 
@@ -291,8 +293,8 @@ public final class RuleEditorScreen extends CrispScreen {
     private Component displayName() { return Component.translatable("SIDE".equalsIgnoreCase(rule.displayStyle) ? "item_get.display.side" : "item_get.display.full"); }
     private void cycle(int d) { TriggerType[] v = TriggerType.values(); setType(v[Math.floorMod(type().ordinal() + d, v.length)]); }
     private void setType(TriggerType t) { if (conditions.isEmpty()) addCondition(); conditions.get(0).type = t; applyDefaults(t, conditions.get(0).data = new JsonObject()); writeConditions(); rebuildWidgets(); }
-    private void defaults(TriggerType t) { switch(t) { case ITEM_ACQUIRED -> put("item", "minecraft:diamond"); case ENTITY_KILLED -> put("entity", "minecraft:zombie"); case HEALTH_AT -> put("value", 10); case HUNGER_AT -> put("value", 10); case EFFECT_GAINED -> put("effect", "minecraft:speed"); case WEATHER_IS -> put("weather", "rain"); case TIME_IS -> put("time", "day"); case ENTER_BIOME -> put("biome", "minecraft:plains"); case ENTER_STRUCTURE -> put("structure", "minecraft:village_plains"); case DEATH_BY -> put("death", "minecraft:fall"); case ADVANCEMENT_DONE -> put("advancement", "minecraft:story/mine_diamond"); case OBSERVE_BLOCK -> { put("block", "minecraft:oak_log"); put("count", 40); } case OBSERVE_ENTITY -> { put("entity", "minecraft:zombie"); put("count", 40); } case HOVER_ITEM -> { put("item", "minecraft:diamond"); put("count", 40); } } }
-    private void applyDefaults(TriggerType t, JsonObject data) { switch(t) { case ITEM_ACQUIRED -> data.addProperty("item", "minecraft:diamond"); case ENTITY_KILLED -> data.addProperty("entity", "minecraft:zombie"); case HEALTH_AT -> data.addProperty("value", 10); case HUNGER_AT -> data.addProperty("value", 10); case EFFECT_GAINED -> data.addProperty("effect", "minecraft:speed"); case WEATHER_IS -> data.addProperty("weather", "rain"); case TIME_IS -> data.addProperty("time", "day"); case ENTER_BIOME -> data.addProperty("biome", "minecraft:plains"); case ENTER_STRUCTURE -> data.addProperty("structure", "minecraft:village_plains"); case DEATH_BY -> data.addProperty("death", "minecraft:fall"); case ADVANCEMENT_DONE -> data.addProperty("advancement", "minecraft:story/mine_diamond"); case OBSERVE_BLOCK -> { data.addProperty("block", "minecraft:oak_log"); data.addProperty("count", 40); } case OBSERVE_ENTITY -> { data.addProperty("entity", "minecraft:zombie"); data.addProperty("count", 40); } case HOVER_ITEM -> { data.addProperty("item", "minecraft:diamond"); data.addProperty("count", 40); } } }
+    private void defaults(TriggerType t) { switch(t) { case ITEM_ACQUIRED -> put("item", "minecraft:diamond"); case ENTITY_KILLED -> put("entity", "minecraft:zombie"); case HEALTH_AT -> put("value", 10); case HUNGER_AT -> put("value", 10); case EFFECT_GAINED -> put("effect", "minecraft:speed"); case WEATHER_IS -> put("weather", "rain"); case TIME_IS -> put("time", "day"); case ENTER_BIOME -> put("biome", "minecraft:plains"); case ENTER_STRUCTURE -> put("structure", "minecraft:village_plains"); case DIMENSION_CHANGED -> put("dimension", "minecraft:overworld"); case DEATH_BY -> put("death", "minecraft:fall"); case ADVANCEMENT_DONE -> put("advancement", "minecraft:story/mine_diamond"); case OBSERVE_BLOCK -> { put("block", "minecraft:oak_log"); put("count", 40); } case OBSERVE_ENTITY -> { put("entity", "minecraft:zombie"); put("count", 40); } case HOVER_ITEM -> { put("item", "minecraft:diamond"); put("count", 40); } case MANUAL -> put("manual", "modpack:first_reminder"); } }
+    private void applyDefaults(TriggerType t, JsonObject data) { switch(t) { case ITEM_ACQUIRED -> data.addProperty("item", "minecraft:diamond"); case ENTITY_KILLED -> data.addProperty("entity", "minecraft:zombie"); case HEALTH_AT -> data.addProperty("value", 10); case HUNGER_AT -> data.addProperty("value", 10); case EFFECT_GAINED -> data.addProperty("effect", "minecraft:speed"); case WEATHER_IS -> data.addProperty("weather", "rain"); case TIME_IS -> data.addProperty("time", "day"); case ENTER_BIOME -> data.addProperty("biome", "minecraft:plains"); case ENTER_STRUCTURE -> data.addProperty("structure", "minecraft:village_plains"); case DIMENSION_CHANGED -> data.addProperty("dimension", "minecraft:overworld"); case DEATH_BY -> data.addProperty("death", "minecraft:fall"); case ADVANCEMENT_DONE -> data.addProperty("advancement", "minecraft:story/mine_diamond"); case OBSERVE_BLOCK -> { data.addProperty("block", "minecraft:oak_log"); data.addProperty("count", 40); } case OBSERVE_ENTITY -> { data.addProperty("entity", "minecraft:zombie"); data.addProperty("count", 40); } case HOVER_ITEM -> { data.addProperty("item", "minecraft:diamond"); data.addProperty("count", 40); } case MANUAL -> data.addProperty("manual", "modpack:first_reminder"); } }
     private void put(String k, String v) { if (!rule.trigger.has(k)) rule.trigger.addProperty(k, v); }
     private void put(String k, double v) { if (!rule.trigger.has(k)) rule.trigger.addProperty(k, v); }
     private void openTypeList() { read(); List<SelectionListScreen.Entry> e = new ArrayList<>(); for (TriggerType t : TriggerType.values()) e.add(new SelectionListScreen.Entry(t.name(), Component.translatable(t.translationKey).getString())); minecraft.setScreen(new SelectionListScreen(this, tr("item_get.editor.choose_trigger"), e, id -> setType(TriggerType.valueOf(id)))); }
@@ -307,9 +309,11 @@ public final class RuleEditorScreen extends CrispScreen {
             case TIME_IS -> "item_get.editor.input.time";
             case ENTER_BIOME -> "item_get.editor.input.biome";
             case ENTER_STRUCTURE -> "item_get.editor.input.structure";
+            case DIMENSION_CHANGED -> "item_get.editor.input.dimension";
             case DEATH_BY -> "item_get.editor.input.death";
             case ADVANCEMENT_DONE -> "item_get.editor.input.advancement";
             case OBSERVE_BLOCK -> "item_get.editor.input.block";
+            case MANUAL -> "item_get.editor.input.manual";
         };
     }
 
@@ -340,7 +344,7 @@ public final class RuleEditorScreen extends CrispScreen {
     }
 
     private String conditionKey(TriggerType type) {
-        return switch(type) { case ITEM_ACQUIRED, HOVER_ITEM -> "item"; case ENTITY_KILLED, OBSERVE_ENTITY -> "entity"; case HEALTH_AT, HUNGER_AT -> "value"; case EFFECT_GAINED -> "effect"; case WEATHER_IS -> "weather"; case TIME_IS -> "time"; case ENTER_BIOME -> "biome"; case ENTER_STRUCTURE -> "structure"; case DEATH_BY -> "death"; case ADVANCEMENT_DONE -> "advancement"; case OBSERVE_BLOCK -> "block"; };
+        return switch(type) { case ITEM_ACQUIRED, HOVER_ITEM -> "item"; case ENTITY_KILLED, OBSERVE_ENTITY -> "entity"; case HEALTH_AT, HUNGER_AT -> "value"; case EFFECT_GAINED -> "effect"; case WEATHER_IS -> "weather"; case TIME_IS -> "time"; case ENTER_BIOME -> "biome"; case ENTER_STRUCTURE -> "structure"; case DIMENSION_CHANGED -> "dimension"; case DEATH_BY -> "death"; case ADVANCEMENT_DONE -> "advancement"; case OBSERVE_BLOCK -> "block"; case MANUAL -> "manual"; };
     }
     private String defaultValue(TriggerType type) { JsonObject data = new JsonObject(); applyDefaults(type, data); return dataValue(data, conditionKey(type), ""); }
     private String dataValue(JsonObject data, String k, String f) { return data.has(k) ? data.get(k).getAsString() : f; }
@@ -356,11 +360,13 @@ public final class RuleEditorScreen extends CrispScreen {
         case TIME_IS -> tr("item_get.editor.time", choiceName(value("time", "day")));
         case ENTER_BIOME -> tr("item_get.editor.biome", translated("biome", value("biome", "minecraft:plains")));
         case ENTER_STRUCTURE -> tr("item_get.editor.structure", translated("structure", value("structure", "minecraft:village_plains")));
+        case DIMENSION_CHANGED -> tr("item_get.editor.dimension", translated("dimension", value("dimension", "minecraft:overworld")));
         case DEATH_BY -> tr("item_get.editor.death", ClientHooks.damageTypeName(value("death", "minecraft:fall")));
         case ADVANCEMENT_DONE -> tr("item_get.editor.advancement", ClientHooks.advancementName(value("advancement", "minecraft:story/mine_diamond")));
         case OBSERVE_BLOCK -> tr("item_get.editor.block", ManagerScreen.item(value("block", "minecraft:oak_log")).getHoverName().getString());
         case OBSERVE_ENTITY -> tr("item_get.editor.entity", entityName(value("entity", "minecraft:zombie")));
         case HOVER_ITEM -> tr("item_get.editor.item", ManagerScreen.item(value("item", "minecraft:diamond")).getHoverName().getString());
+        case MANUAL -> tr("item_get.editor.manual", value("manual", "modpack:first_reminder"));
     }; }
 
     private void openTarget() { read(); switch(type()) {
@@ -372,14 +378,17 @@ public final class RuleEditorScreen extends CrispScreen {
         case TIME_IS -> openEntries(tr("item_get.editor.choose_time"), List.of(entry("day", choiceName("day")), entry("noon", choiceName("noon")), entry("night", choiceName("night")), entry("midnight", choiceName("midnight"))), "time");
         case ENTER_BIOME -> openEntries(tr("item_get.editor.choose_biome"), catalog(ClientHooks.biomes(), "biome"), "biome");
         case ENTER_STRUCTURE -> openEntries(tr("item_get.editor.choose_structure"), catalog(ClientHooks.structures(), "structure"), "structure");
+        case DIMENSION_CHANGED -> openEntries(tr("item_get.editor.choose_dimension"), dimensions(), "dimension");
         case DEATH_BY -> openEntries(tr("item_get.editor.choose_death"), namedCatalog(ClientHooks.damageTypes(), ClientHooks::damageTypeName), "death");
         case ADVANCEMENT_DONE -> openEntries(tr("item_get.editor.choose_advancement"), namedCatalog(ClientHooks.advancements(), ClientHooks::advancementName), "advancement");
         case OBSERVE_BLOCK -> minecraft.setScreen(new ItemPickerScreen(this, stack -> { rule.trigger.addProperty("block", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString()); minecraft.setScreen(this); }));
         case OBSERVE_ENTITY -> minecraft.setScreen(new EntityPickerScreen(this, id -> { rule.trigger.addProperty("entity", id); minecraft.setScreen(this); }));
         case HOVER_ITEM -> minecraft.setScreen(new ItemPickerScreen(this, stack -> { setItemTarget("item", stack, true); minecraft.setScreen(this); }));
+        case MANUAL -> {}
     } }
     private void openEntries(String title, List<SelectionListScreen.Entry> entries, String key) { minecraft.setScreen(new SelectionListScreen(this, title, entries, id -> { rule.trigger.addProperty(key, id); minecraft.setScreen(this); })); }
     private List<SelectionListScreen.Entry> effects() { List<SelectionListScreen.Entry> out = new ArrayList<>(); BuiltInRegistries.MOB_EFFECT.entrySet().forEach(e -> { String id = e.getKey().location().toString(); out.add(entry(id, e.getValue().getDisplayName().getString())); }); out.sort(Comparator.comparing(SelectionListScreen.Entry::name)); return out; }
+    private List<SelectionListScreen.Entry> dimensions() { return List.of(entry("minecraft:overworld", translated("dimension", "minecraft:overworld")), entry("minecraft:the_nether", translated("dimension", "minecraft:the_nether")), entry("minecraft:the_end", translated("dimension", "minecraft:the_end"))); }
     private List<SelectionListScreen.Entry> catalog(List<String> ids, String prefix) { List<SelectionListScreen.Entry> out = new ArrayList<>(); ids.forEach(id -> out.add(entry(id, translated(prefix, id)))); out.sort(Comparator.comparing(SelectionListScreen.Entry::name)); return out; }
     private List<SelectionListScreen.Entry> namedCatalog(List<String> ids, java.util.function.Function<String, String> names) { List<SelectionListScreen.Entry> out = new ArrayList<>(); ids.forEach(id -> out.add(entry(id, names.apply(id)))); out.sort(Comparator.comparing(SelectionListScreen.Entry::name)); return out; }
     private void openConditionPicker() { read(); List<SelectionListScreen.Entry> e = new ArrayList<>(); for (TriggerType t : TriggerType.values()) e.add(new SelectionListScreen.Entry(t.name(), Component.translatable(t.translationKey).getString())); minecraft.setScreen(new SelectionListScreen(this, tr("item_get.editor.choose_condition"), e, id -> { rule.trigger.addProperty("condition_preview", id); minecraft.setScreen(this); })); }
@@ -543,8 +552,10 @@ public final class RuleEditorScreen extends CrispScreen {
             case TIME_IS -> new ItemStack(net.minecraft.world.item.Items.CLOCK);
             case ENTER_BIOME -> new ItemStack(net.minecraft.world.item.Items.GRASS_BLOCK);
             case ENTER_STRUCTURE -> new ItemStack(net.minecraft.world.item.Items.FILLED_MAP);
+            case DIMENSION_CHANGED -> new ItemStack(net.minecraft.world.item.Items.COMPASS);
             case DEATH_BY -> new ItemStack(net.minecraft.world.item.Items.SKELETON_SKULL);
             case ADVANCEMENT_DONE -> new ItemStack(net.minecraft.world.item.Items.WRITABLE_BOOK);
+            case MANUAL -> new ItemStack(net.minecraft.world.item.Items.COMMAND_BLOCK);
         };
     }
 

@@ -4,6 +4,7 @@ import com.kuzhi.itemget.network.ItemGetNetwork;
 import com.kuzhi.itemget.network.RuleJson;
 import com.kuzhi.itemget.network.ShowReminderPacket;
 import com.kuzhi.itemget.network.SyncObserverRulesPacket;
+import com.kuzhi.itemget.api.ItemGetApi;
 import com.kuzhi.itemget.rule.ReminderRule;
 import com.kuzhi.itemget.rule.RuleConditions;
 import com.kuzhi.itemget.rule.RuleStore;
@@ -66,11 +67,40 @@ public final class ServerEvents {
                                         .executes(ctx -> grantAllProgress(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"))))
                                 .then(Commands.argument("rule", StringArgumentType.string())
                                         .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(ruleIds(ctx.getSource()), builder))
-                                        .executes(ctx -> grantProgress(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "rule")))))));
+                                        .executes(ctx -> grantProgress(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "rule"))))))
+                .then(Commands.literal("trigger")
+                        .then(Commands.argument("targets", EntityArgument.players())
+                                .then(Commands.argument("rule", StringArgumentType.string())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(ruleIds(ctx.getSource()), builder))
+                                        .executes(ctx -> triggerRule(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "rule"), false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> triggerRule(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "rule"), true))))))
+                .then(Commands.literal("show")
+                        .then(Commands.argument("targets", EntityArgument.players())
+                                .then(Commands.argument("rule", StringArgumentType.string())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(ruleIds(ctx.getSource()), builder))
+                                        .executes(ctx -> showRule(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "rule"))))))
+                .then(Commands.literal("fire")
+                        .then(Commands.argument("targets", EntityArgument.players())
+                                .then(Commands.argument("manual", StringArgumentType.string())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(manualTriggerIds(ctx.getSource()), builder))
+                                        .executes(ctx -> fireManual(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "manual"), false))
+                                        .then(Commands.literal("force")
+                                                .executes(ctx -> fireManual(ctx.getSource(), EntityArgument.getPlayers(ctx, "targets"), StringArgumentType.getString(ctx, "manual"), true)))))));
     }
 
     private static List<String> ruleIds(CommandSourceStack source) {
         return RuleStore.get(source.getLevel()).rules().stream().map(rule -> rule.id).toList();
+    }
+
+    private static List<String> manualTriggerIds(CommandSourceStack source) {
+        return RuleStore.get(source.getLevel()).rules().stream()
+                .flatMap(rule -> RuleConditions.entries(rule).stream())
+                .filter(condition -> condition.type() == TriggerType.MANUAL)
+                .map(condition -> text(condition, "manual", ""))
+                .filter(id -> !id.isBlank())
+                .distinct()
+                .toList();
     }
 
     private static int addLinkTestRules(CommandSourceStack source) {
@@ -137,22 +167,48 @@ public final class ServerEvents {
         return targets.size();
     }
 
+    private static int triggerRule(CommandSourceStack source, Collection<ServerPlayer> targets, String ruleId, boolean force) throws CommandSyntaxException {
+        findRule(source, ruleId);
+        int changed = 0;
+        for (ServerPlayer player : targets) if (ItemGetApi.trigger(player, ruleId, force)) changed++;
+        int changedCount = changed;
+        source.sendSuccess(() -> Component.translatable(force ? "item_get.command.trigger.force" : "item_get.command.trigger", ruleId, changedCount, targets.size()), true);
+        return changed;
+    }
+
+    private static int showRule(CommandSourceStack source, Collection<ServerPlayer> targets, String ruleId) throws CommandSyntaxException {
+        findRule(source, ruleId);
+        int shown = 0;
+        for (ServerPlayer player : targets) if (ItemGetApi.show(player, ruleId)) shown++;
+        int shownCount = shown;
+        source.sendSuccess(() -> Component.translatable("item_get.command.show", ruleId, shownCount), true);
+        return shown;
+    }
+
+    private static int fireManual(CommandSourceStack source, Collection<ServerPlayer> targets, String triggerId, boolean force) {
+        int fired = 0;
+        for (ServerPlayer player : targets) fired += ItemGetApi.fireExternalTrigger(player, triggerId, force);
+        int firedCount = fired;
+        source.sendSuccess(() -> Component.translatable(force ? "item_get.command.fire.force" : "item_get.command.fire", triggerId, firedCount, targets.size()), true);
+        return fired;
+    }
+
     private static int clearProgress(CommandSourceStack source, Collection<ServerPlayer> targets) {
-        for (ServerPlayer player : targets) player.getPersistentData().remove(DATA);
+        for (ServerPlayer player : targets) ItemGetApi.reset(player);
         source.sendSuccess(() -> Component.translatable("item_get.command.progress.clear", targets.size()), true);
         return targets.size();
     }
 
     private static int grantProgress(CommandSourceStack source, Collection<ServerPlayer> targets, String ruleId) throws CommandSyntaxException {
         ReminderRule rule = findRule(source, ruleId);
-        for (ServerPlayer player : targets) grantRule(player, rule);
+        for (ServerPlayer player : targets) ItemGetApi.unlock(player, rule.id);
         source.sendSuccess(() -> Component.translatable("item_get.command.progress.grant", ruleId, targets.size()), true);
         return targets.size();
     }
 
     private static int grantAllProgress(CommandSourceStack source, Collection<ServerPlayer> targets) {
         List<ReminderRule> rules = RuleStore.get(source.getLevel()).rules();
-        for (ServerPlayer player : targets) for (ReminderRule rule : rules) grantRule(player, rule);
+        for (ServerPlayer player : targets) for (ReminderRule rule : rules) ItemGetApi.unlock(player, rule.id);
         source.sendSuccess(() -> Component.translatable("item_get.command.progress.grant_all", rules.size(), targets.size()), true);
         return targets.size();
     }
@@ -300,6 +356,11 @@ public final class ServerEvents {
         }
     }
 
+    @SubscribeEvent
+    public void playerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) recordDimensionSwitch(player, event.getTo().location().toString());
+    }
+
     private static void recordGain(ServerPlayer player, ItemStack stack) {
         if (stack.isEmpty()) return; ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()); if (itemId == null) return;
         CompoundTag data = player.getPersistentData().getCompound(DATA); CompoundTag totals = data.getCompound("totals"), shown = data.getCompound("shown"), credited = data.getCompound("credited_gains"), states = data.getCompound("condition_states"), revisions = data.getCompound("rule_revisions");
@@ -349,7 +410,8 @@ public final class ServerEvents {
             case ITEM_ACQUIRED, ENTITY_KILLED, OBSERVE_BLOCK, OBSERVE_ENTITY, HOVER_ITEM -> totals.getInt(conditionKey(rule, condition)) >= threshold(condition);
             case ENTER_BIOME -> biomeMatches(player, condition);
             case ENTER_STRUCTURE -> inStructure(player, text(condition, "structure", "minecraft:village_plains"));
-            case DEATH_BY, ADVANCEMENT_DONE -> false;
+            case DIMENSION_CHANGED -> dimensionMatches(player, condition);
+            case DEATH_BY, ADVANCEMENT_DONE, MANUAL -> false;
             default -> stateMatches(player, condition);
         };
         return value;
@@ -365,7 +427,7 @@ public final class ServerEvents {
             }
             case WEATHER_IS -> switch (text(condition, "weather", "clear")) { case "thunder" -> player.serverLevel().isThundering(); case "rain" -> player.serverLevel().isRaining() && !player.serverLevel().isThundering(); default -> !player.serverLevel().isRaining(); };
             case TIME_IS -> timeMatches(player.serverLevel().getDayTime() % 24000L, text(condition, "time", "day"));
-            case ENTER_BIOME, ENTER_STRUCTURE, DEATH_BY, ADVANCEMENT_DONE, OBSERVE_BLOCK, OBSERVE_ENTITY, HOVER_ITEM -> false;
+            case ENTER_BIOME, ENTER_STRUCTURE, DIMENSION_CHANGED, DEATH_BY, ADVANCEMENT_DONE, OBSERVE_BLOCK, OBSERVE_ENTITY, HOVER_ITEM, MANUAL -> false;
             default -> false;
         };
     }
@@ -378,6 +440,7 @@ public final class ServerEvents {
         for(int[] offset:STRUCTURE_SAMPLE_OFFSETS){var start=player.serverLevel().structureManager().getStructureWithPieceAt(player.blockPosition().offset(offset[0],offset[1],offset[2]),structure);if(start!=null&&start.isValid())return true;}return false;
     }
     private static boolean biomeMatches(ServerPlayer player,RuleConditions.Entry condition){return player.serverLevel().getBiome(player.blockPosition()).unwrapKey().map(k->k.location().toString().equals(text(condition,"biome","minecraft:plains"))).orElse(false);}
+    private static boolean dimensionMatches(ServerPlayer player, RuleConditions.Entry condition) { return player.serverLevel().dimension().location().toString().equals(text(condition, "dimension", "minecraft:overworld")); }
     private static String text(ReminderRule rule, String key, String fallback) { return rule.trigger.has(key) ? rule.trigger.get(key).getAsString() : fallback; }
     private static String text(RuleConditions.Entry condition, String key, String fallback) { JsonObject data = condition.data(); return data.has(key) ? data.get(key).getAsString() : fallback; }
     private static double decimal(ReminderRule rule, String key, double fallback) { try { return rule.trigger.has(key) ? rule.trigger.get(key).getAsDouble() : fallback; } catch (Exception ignored) { return fallback; } }
@@ -455,6 +518,23 @@ public final class ServerEvents {
             for (RuleConditions.Entry condition : RuleConditions.entries(rule)) {
                 if (!rule.enabled || condition.type() != TriggerType.DEATH_BY) continue;
                 if (!text(condition, "death", "minecraft:fall").equals(deathType)) continue;
+                if (conditionsSatisfied(player, rule, condition, totals)) { fire(player, rule, data, shown); break; }
+            }
+        }
+        data.put("totals", totals); data.put("shown", shown); data.put("condition_states", states); data.put("rule_revisions", revisions); player.getPersistentData().put(DATA, data);
+    }
+
+    private static void recordDimensionSwitch(ServerPlayer player, String dimension) {
+        CompoundTag data = player.getPersistentData().getCompound(DATA);
+        CompoundTag totals = data.getCompound("totals");
+        CompoundTag shown = data.getCompound("shown");
+        CompoundTag states = data.getCompound("condition_states");
+        CompoundTag revisions = data.getCompound("rule_revisions");
+        for (ReminderRule rule : RuleStore.get(player.serverLevel()).rules()) {
+            prepareRevision(rule, shown, totals, states, revisions); if (hasShown(rule, shown)) continue;
+            for (RuleConditions.Entry condition : RuleConditions.entries(rule)) {
+                if (!rule.enabled || condition.type() != TriggerType.DIMENSION_CHANGED) continue;
+                if (!text(condition, "dimension", "minecraft:overworld").equals(dimension)) continue;
                 if (conditionsSatisfied(player, rule, condition, totals)) { fire(player, rule, data, shown); break; }
             }
         }

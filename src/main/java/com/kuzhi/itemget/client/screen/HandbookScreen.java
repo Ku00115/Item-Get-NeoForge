@@ -501,7 +501,7 @@ public final class HandbookScreen extends CrispScreen {
                 case ALL -> true;
                 case ITEMS -> type == TriggerType.ITEM_ACQUIRED;
                 case ENTITY -> type == TriggerType.ENTITY_KILLED || type == TriggerType.OBSERVE_ENTITY;
-                case WORLD -> type == TriggerType.WEATHER_IS || type == TriggerType.TIME_IS || type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE;
+                case WORLD -> type == TriggerType.WEATHER_IS || type == TriggerType.TIME_IS || type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE || type == TriggerType.DIMENSION_CHANGED || type == TriggerType.MANUAL;
                 case PLAYER -> type == TriggerType.HEALTH_AT || type == TriggerType.HUNGER_AT || type == TriggerType.EFFECT_GAINED || type == TriggerType.DEATH_BY || type == TriggerType.OBSERVE_BLOCK || type == TriggerType.HOVER_ITEM;
                 case ADVANCEMENT -> type == TriggerType.ADVANCEMENT_DONE;
                 case PONDER -> ClientHooks.hasPonderScene(rule.ponderTarget);
