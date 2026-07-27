@@ -4,6 +4,7 @@ import com.kuzhi.itemget.client.screen.ManagerScreen;
 import com.kuzhi.itemget.client.screen.HandbookScreen;
 import com.kuzhi.itemget.client.screen.ReminderScreen;
 import com.kuzhi.itemget.rule.ReminderRule;
+import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,10 +20,14 @@ import java.util.LinkedHashMap;
 import java.util.Collection;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 import java.util.function.Consumer;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
 
 public final class ClientHooks {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final Queue<ReminderRule> PENDING = new ArrayDeque<>();
     private static List<ReminderRule> LAST_HISTORY = List.of();
     private static List<ReminderRule> OBSERVER_RULES = List.of();
@@ -30,6 +35,9 @@ public final class ClientHooks {
     private static Map<String, String> DAMAGE_NAMES = Map.of(), ADVANCEMENT_NAMES = Map.of();
     private static int inventoryButtonX = -1, inventoryButtonY = -1;
     private static boolean uiLayoutRequested;
+    private static Boolean jeiPresent;
+    private static final Map<String, String> JEI_BUTTON_LOGS = new HashMap<>();
+    private static Object jeiRuntime;
     public static void openManager(List<ReminderRule> rules, boolean editable, String biomes, String structures, String damageTypes, String advancements) {
         BIOMES = lines(biomes); STRUCTURES = lines(structures); DAMAGE_TYPES = ids(damageTypes); ADVANCEMENTS = ids(advancements);
         DAMAGE_NAMES = damageNames(damageTypes); ADVANCEMENT_NAMES = names(advancements);
@@ -47,6 +55,79 @@ public final class ClientHooks {
     }
     public static boolean hasPonder() {
         return hasPonderer() || hasCreatePonder();
+    }
+    public static boolean hasJei() {
+        if (jeiPresent == null) {
+            jeiPresent = hasClass("mezz.jei.api.runtime.IJeiRuntime");
+            if (jeiPresent) LOGGER.info("Item Get! detected JEI runtime class.");
+            else LOGGER.warn("Item Get! did not detect JEI runtime class; JEI buttons will be hidden.");
+        }
+        return jeiPresent;
+    }
+    public static void setJeiRuntime(Object runtime) {
+        jeiRuntime = runtime;
+        jeiPresent = runtime != null || hasClass("mezz.jei.api.runtime.IJeiRuntime");
+        if (runtime == null) LOGGER.info("Item Get! JEI runtime became unavailable.");
+        else LOGGER.info("Item Get! received JEI runtime from plugin: {}", runtime.getClass().getName());
+    }
+    public static void logJeiButtonState(ReminderRule rule, boolean unlocked, boolean hasJei, ItemStack stack) {
+        if (rule == null) return;
+        String id = rule.id == null || rule.id.isBlank() ? "<unnamed>" : rule.id;
+        String mode = rule.jeiMode == null || rule.jeiMode.isBlank() ? "AUTO" : rule.jeiMode;
+        String target = rule.target();
+        String explicitTarget = rule.jeiTarget == null ? "" : rule.jeiTarget;
+        String stackName = stack == null || stack.isEmpty() ? "<empty>" : stack.getHoverName().getString();
+        String signature = unlocked + "|" + hasJei + "|" + mode + "|" + rule.triggerType + "|" + target + "|" + explicitTarget + "|" + stackName;
+        String previous = JEI_BUTTON_LOGS.put(id, signature);
+        if (signature.equals(previous)) return;
+        if (unlocked && hasJei && stack != null && !stack.isEmpty()) {
+            LOGGER.info("Item Get! JEI button visible for rule {}: mode={}, trigger={}, target={}, jeiTarget={}, stack={}", id, mode, rule.triggerType, target, explicitTarget, stackName);
+        } else {
+            LOGGER.warn("Item Get! JEI button hidden for rule {}: unlocked={}, hasJei={}, mode={}, trigger={}, target={}, jeiTarget={}, stack={}", id, unlocked, hasJei, mode, rule.triggerType, target, explicitTarget, stackName);
+        }
+    }
+    public static boolean openJeiUses(ItemStack stack) { return openJei(stack, "USES"); }
+    public static boolean openJei(ItemStack stack, String mode) {
+        if (stack == null || stack.isEmpty()) {
+            LOGGER.warn("Item Get! JEI open skipped: empty stack for mode {}", mode);
+            return false;
+        }
+        if (!hasJei()) {
+            LOGGER.warn("Item Get! JEI open skipped: JEI runtime class is not present for stack {}", stack.getHoverName().getString());
+            return false;
+        }
+        try {
+            Object runtime = jeiRuntime;
+            if (runtime == null) {
+                LOGGER.warn("Item Get! JEI open failed: JEI runtime has not been provided yet for stack {}", stack.getHoverName().getString());
+                return false;
+            }
+            Object ingredientManager = call(runtime, "getIngredientManager");
+            Object vanillaItem = Class.forName("mezz.jei.api.constants.VanillaTypes").getField("ITEM_STACK").get(null);
+            Object typedResult = call(ingredientManager, "createTypedIngredient", vanillaItem, stack);
+            Object typed = typedResult instanceof java.util.Optional<?> optional ? optional.orElse(null) : typedResult;
+            if (typed == null) {
+                LOGGER.warn("Item Get! JEI open failed: could not create typed ingredient for stack {}", stack.getHoverName().getString());
+                return false;
+            }
+            Object helpers = call(runtime, "getJeiHelpers");
+            Object focusFactory = call(helpers, "getFocusFactory");
+            @SuppressWarnings({"unchecked", "rawtypes"})
+            Object role = Enum.valueOf((Class<? extends Enum>) Class.forName("mezz.jei.api.recipe.RecipeIngredientRole"), "RECIPES".equalsIgnoreCase(mode) ? "OUTPUT" : "INPUT");
+            Object focus = call(focusFactory, "createFocus", role, typed);
+            Object recipesGui = call(runtime, "getRecipesGui");
+            if (tryShow(recipesGui, focus)) {
+                LOGGER.info("Item Get! opened JEI {} for {}", mode, stack.getHoverName().getString());
+                return true;
+            }
+            Object group = focusGroup(focusFactory, focus);
+            boolean opened = group != null && tryShow(recipesGui, group);
+            if (!opened) LOGGER.warn("Item Get! JEI open failed: recipes GUI did not accept focus for {}", stack.getHoverName().getString());
+            return opened;
+        } catch (Throwable exception) {
+            LOGGER.warn("Item Get! JEI open failed for stack {} mode {}", stack.getHoverName().getString(), mode, exception);
+            return false;
+        }
     }
     public static boolean hasPonderer() { return hasClass("com.nododiiiii.ponderer.ui.PonderItemGridScreen"); }
     public static boolean hasCreatePonder() { return hasClass("net.createmod.ponder.command.SimplePonderActions"); }
@@ -102,6 +183,30 @@ public final class ClientHooks {
     private static boolean hasClass(String name) {
         try { Class.forName(name); return true; }
         catch (Throwable ignored) { return false; }
+    }
+    private static Object call(Object target, String name, Object... args) throws ReflectiveOperationException {
+        for (Method method : target.getClass().getMethods()) {
+            if (!method.getName().equals(name) || method.getParameterCount() != args.length || method.isVarArgs()) continue;
+            try { return method.invoke(target, args); }
+            catch (IllegalArgumentException ignored) {}
+        }
+        throw new NoSuchMethodException(name);
+    }
+    private static boolean tryShow(Object recipesGui, Object focus) {
+        try { call(recipesGui, "show", focus); return true; }
+        catch (Throwable ignored) { return false; }
+    }
+    private static Object focusGroup(Object focusFactory, Object focus) {
+        for (Method method : focusFactory.getClass().getMethods()) {
+            if (!method.getName().equals("createFocusGroup") || method.getParameterCount() != 1 || !method.isVarArgs()) continue;
+            try {
+                Class<?> component = method.getParameterTypes()[0].getComponentType();
+                Object array = Array.newInstance(component, 1);
+                Array.set(array, 0, focus);
+                return method.invoke(focusFactory, new Object[]{array});
+            } catch (Throwable ignored) {}
+        }
+        return null;
     }
     public static boolean openCreatePonder(String target) {
         if (!hasCreatePonderScene(target)) return false;

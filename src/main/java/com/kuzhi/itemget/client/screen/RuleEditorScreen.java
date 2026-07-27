@@ -37,7 +37,7 @@ public final class RuleEditorScreen extends CrispScreen {
     private final List<ConditionDraft> conditions = new ArrayList<>();
     private String conditionLogic = "AND";
     private int rootX, rootW, navX, navW, formX, formW, previewX, previewW, top, bottom, row;
-    private int navScroll, previewScroll, nbtButtonX, nbtButtonY, nbtButtonSize;
+    private int navScroll, formScroll, previewScroll, nbtButtonX, nbtButtonY, nbtButtonSize;
     private boolean descFocused;
     private int descScroll;
 
@@ -63,6 +63,7 @@ public final class RuleEditorScreen extends CrispScreen {
         int y = top + 30;
         int h = height < 300 ? 18 : 20;
         int gap = height < 300 ? 6 : 8;
+        if (section == Section.TRIGGER) formScroll = Math.max(0, Math.min(maxFormScroll(), formScroll));
         switch (section) {
             case BASIC -> {
                 titleBox = new EditBox(font, formX, y, formW, h, Component.translatable("item_get.editor.title"));
@@ -77,33 +78,44 @@ public final class RuleEditorScreen extends CrispScreen {
             case TRIGGER -> {
                 int typeW = Math.max(78, Math.min(118, formW / 3));
                 int pick = h, check = h;
-                int inputW = Math.max(58, formW - typeW - pick - check - 14);
-                int maxY = height - h - 48;
-                for (int i = 0; i < conditions.size() && y <= maxY; i++) {
+                int rightPad = 8;
+                int inputW = Math.max(58, formW - typeW - pick - check - rightPad - 18);
+                if (conditions.size() > 1) {
+                    int logicW = Math.min(116, formW);
+                    addRenderableWidget(Button.builder(Component.translatable("AND".equals(conditionLogic) ? "item_get.editor.logic_all" : "item_get.editor.logic_any"), b -> { read(); conditionLogic = "AND".equals(conditionLogic) ? "OR" : "AND"; rebuildWidgets(); }).bounds(formX, top + 32, logicW, h).build());
+                }
+                int minY = formViewportTop(), maxY = formViewportBottom();
+                y = minY - formScroll;
+                for (int i = 0; i < conditions.size(); i++) {
                     ConditionDraft c = conditions.get(i);
                     int index = i;
+                    int rowH = conditionRowHeight(c);
+                    boolean visible = y >= minY && y + rowH <= maxY;
+                    if (visible) {
                     addRenderableWidget(Button.builder(Component.translatable(c.type.translationKey), b -> openConditionType(index)).bounds(formX, y, typeW, h).build());
                     c.input = new EditBox(font, formX + typeW + 4, y, inputW, h, Component.translatable("item_get.editor.condition_input"));
                     c.input.setMaxLength(4096);
                     c.input.setValue(conditionInput(c));
                     c.input.setHint(Component.translatable(inputHint(c.type)));
                     addRenderableWidget(c.input);
-                    addRenderableWidget(Button.builder(Component.empty(), b -> openConditionTarget(index)).bounds(formX + typeW + inputW + 8, y, pick, h).build());
-                    addRenderableWidget(Button.builder(Component.literal(c.selected ? "■" : "□"), b -> { read(); c.selected = !c.selected; rebuildWidgets(); }).bounds(formX + formW - check, y, check, h).build());
+                    addRenderableWidget(Button.builder(Component.empty(), b -> openConditionTarget(index)).bounds(formX + typeW + inputW + 6, y, pick, h).build());
+                    addRenderableWidget(Button.builder(Component.literal(c.selected ? "\u25A0" : "\u25A1"), b -> { read(); c.selected = !c.selected; rebuildWidgets(); }).bounds(formX + formW - check - rightPad, y, check, h).build());
+                    }
                     if (counted(c.type)) {
+                        if (visible) {
                         c.count = new EditBox(font, formX + typeW + 4, y + h + 3, 48, h, Component.translatable("item_get.editor.count"));
                         c.count.setValue(Integer.toString(threshold(c.data)));
                         addRenderableWidget(c.count);
+                        }
                         y += h + 7;
                     }
                     y += h + gap;
                 }
                 int addW = Math.min(60, formW);
-                addRenderableWidget(Button.builder(Component.literal("+"), b -> { read(); addCondition(); rebuildWidgets(); }).bounds(formX + (formW - addW) / 2, Math.min(y, maxY + h), addW, h).build());
+                if (y + h >= minY && y <= maxY) addRenderableWidget(Button.builder(Component.literal("+"), b -> { read(); addCondition(); formScroll = Integer.MAX_VALUE; rebuildWidgets(); }).bounds(formX + (formW - addW) / 2, y, addW, h).build());
                 if (selectedConditionCount() >= 1) {
-                    int by = height - h - 32, bw = Math.max(64, Math.min(100, (formW - 6) / 2)), bx = formX + (formW - bw * 2 - 6) / 2;
-                    addRenderableWidget(Button.builder(Component.translatable("AND".equals(conditionLogic) ? "item_get.editor.logic_all" : "item_get.editor.logic_any"), b -> { read(); conditionLogic = "AND".equals(conditionLogic) ? "OR" : "AND"; rebuildWidgets(); }).bounds(bx, by, bw, h).build());
-                    addRenderableWidget(Button.builder(Component.translatable("item_get.editor.logic_delete"), b -> { read(); deleteSelectedConditions(); rebuildWidgets(); }).bounds(bx + bw + 6, by, bw, h).build());
+                    int by = height - h - 32, bw = Math.max(64, Math.min(100, formW)), bx = formX + (formW - bw) / 2;
+                    addRenderableWidget(Button.builder(Component.translatable("item_get.editor.logic_delete"), b -> { read(); deleteSelectedConditions(); rebuildWidgets(); }).bounds(bx, by, bw, h).build());
                 }
             }
             case DISPLAY -> {
@@ -123,7 +135,16 @@ public final class RuleEditorScreen extends CrispScreen {
                     minecraft.setScreen(this);
                 }));
             }).bounds(formX, y, Math.min(150, formW), h).build());
-            case PONDER -> addRenderableWidget(Button.builder(Component.translatable("item_get.editor.ponder", ponderName()), b -> openPonderBinding()).bounds(formX, y, formW, h).build());
+            case PONDER -> {
+                int innerX = formX, innerW = Math.max(120, formW - 8);
+                int clearW = Math.min(58, Math.max(46, innerW / 4)), offW = Math.min(58, Math.max(44, innerW / 4));
+                int selectW = Math.max(72, innerW - clearW - offW - 12);
+                addRenderableWidget(Button.builder(Component.translatable("item_get.editor.ponder", ponderName()), b -> openPonderBinding()).bounds(innerX, y, innerW, h).build());
+                y += h + gap;
+                addRenderableWidget(Button.builder(Component.translatable("item_get.editor.jei_target", jeiTargetName()), b -> openJeiBinding()).bounds(innerX, y, selectW, h).build());
+                addRenderableWidget(Button.builder(Component.translatable("item_get.editor.jei_clear"), b -> { read(); rule.jeiTarget = ""; if (!"OFF".equalsIgnoreCase(rule.jeiMode)) rule.jeiMode = "AUTO"; rebuildWidgets(); }).bounds(innerX + selectW + 6, y, clearW, h).build());
+                addRenderableWidget(Button.builder(Component.translatable("OFF".equalsIgnoreCase(rule.jeiMode) ? "item_get.editor.jei_off_on" : "item_get.editor.jei_off_off"), b -> toggleJeiOff()).bounds(innerX + selectW + clearW + 12, y, offW, h).build());
+            }
             case DEBUG -> addRenderableWidget(Button.builder(Component.translatable("item_get.editor.preview"), b -> preview()).bounds(formX, y, Math.min(130, formW), h).build());
         }
 
@@ -152,6 +173,12 @@ public final class RuleEditorScreen extends CrispScreen {
         if (section == Section.BASIC && descHit(x, y)) {
             descFocused = true;
             descScroll = Math.max(0, Math.min(maxDescScroll(), descScroll - (int)Math.signum(delta)));
+            return true;
+        }
+        if (section == Section.TRIGGER && x >= formX - 4 && x <= formX + formW + 4 && y >= formViewportTop() && y <= formViewportBottom()) {
+            read();
+            formScroll = Math.max(0, Math.min(maxFormScroll(), formScroll - (int)Math.signum(delta) * row));
+            rebuildWidgets();
             return true;
         }
         if (x >= navX && x <= navX + navW && y >= navTop() && y <= navBottom()) {
@@ -394,6 +421,8 @@ public final class RuleEditorScreen extends CrispScreen {
     private void openConditionPicker() { read(); List<SelectionListScreen.Entry> e = new ArrayList<>(); for (TriggerType t : TriggerType.values()) e.add(new SelectionListScreen.Entry(t.name(), Component.translatable(t.translationKey).getString())); minecraft.setScreen(new SelectionListScreen(this, tr("item_get.editor.choose_condition"), e, id -> { rule.trigger.addProperty("condition_preview", id); minecraft.setScreen(this); })); }
     private void openIconPicker() { read(); minecraft.setScreen(new IconSourcePickerScreen(this, stack -> { rule.icon = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(); rule.iconImage = ""; rule.iconStack = stack.copyWithCount(1).save(minecraft.level.registryAccess()).toString(); minecraft.setScreen(this); }, image -> { rule.icon = ""; rule.iconImage = image; rule.iconStack = ""; minecraft.setScreen(this); })); }
     private void openPonderBinding() { read(); if (ClientHooks.openPonderSelector(this, id -> { rule.ponderTarget = id; minecraft.setScreen(this); }, () -> minecraft.setScreen(this))) return; minecraft.setScreen(new ItemPickerScreen(this, stack -> { rule.ponderTarget = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(); minecraft.setScreen(this); })); }
+    private void openJeiBinding() { read(); minecraft.setScreen(new ItemPickerScreen(this, stack -> { rule.jeiTarget = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(); rule.jeiMode = "CUSTOM"; minecraft.setScreen(this); })); }
+    private void toggleJeiOff() { read(); rule.jeiMode = "OFF".equalsIgnoreCase(rule.jeiMode) ? "AUTO" : "OFF"; rebuildWidgets(); }
     private void preview() { read(); if ("SIDE".equalsIgnoreCase(rule.displayStyle)) SideReminderOverlay.preview(rule); else minecraft.setScreen(new ReminderScreen(rule, this)); }
     private void read() {
         if (count != null) {
@@ -409,9 +438,10 @@ public final class RuleEditorScreen extends CrispScreen {
         if (subtitleBox != null) rule.subtitle = subtitleBox.getValue();
         if (!conditions.isEmpty()) writeConditions();
     }
-    private void applyDraft() { writeConditions(); original.id = rule.id; original.triggerType = rule.triggerType; original.trigger = rule.trigger.deepCopy(); original.title = rule.title; original.subtitle = rule.subtitle; original.description = rule.description; original.icon = rule.icon; original.iconImage = rule.iconImage; original.iconStack = rule.iconStack; original.ponderTarget = rule.ponderTarget; original.displayStyle = rule.displayStyle; original.sound = rule.sound; original.music = rule.music; original.pauseSingleplayer = rule.pauseSingleplayer; original.enabled = rule.enabled; }
+    private void applyDraft() { writeConditions(); original.id = rule.id; original.triggerType = rule.triggerType; original.trigger = rule.trigger.deepCopy(); original.title = rule.title; original.subtitle = rule.subtitle; original.autoSubtitle = rule.autoSubtitle; original.description = rule.description; original.lockedTitle = rule.lockedTitle; original.lockedSubtitle = rule.lockedSubtitle; original.lockedDescription = rule.lockedDescription; original.category = rule.category; original.group = rule.group; original.sort = rule.sort; original.entryNumber = rule.entryNumber; original.icon = rule.icon; original.iconImage = rule.iconImage; original.iconStack = rule.iconStack; original.ponderTarget = rule.ponderTarget; original.jeiMode = rule.jeiMode; original.jeiTarget = rule.jeiTarget; original.displayStyle = rule.displayStyle; original.sound = rule.sound; original.music = rule.music; original.pauseSingleplayer = rule.pauseSingleplayer; original.enabled = rule.enabled; original.triggerRevision = rule.triggerRevision; }
     private String iconName() { return ConfigIconLibrary.label(rule); }
     private String ponderName() { if (rule.ponderTarget == null || rule.ponderTarget.isBlank()) return tr("item_get.editor.ponder_none"); ItemStack stack = ManagerScreen.item(rule.ponderTarget); return stack.isEmpty() ? rule.ponderTarget : stack.getHoverName().getString(); }
+    private String jeiTargetName() { if ("OFF".equalsIgnoreCase(rule.jeiMode)) return tr("item_get.editor.jei_mode.off"); ItemStack stack = ManagerScreen.jeiStack(rule); return stack.isEmpty() ? tr("item_get.editor.jei_mode.auto") : stack.getHoverName().getString(); }
     private String targetNameForNbt() { return targetStackForNbtButton().getHoverName().getString(); }
     private void setItemTarget(String key, ItemStack stack, boolean fillNbt) {
         ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
@@ -499,18 +529,18 @@ public final class RuleEditorScreen extends CrispScreen {
                 drawDescriptionBox(g);
             }
             case TRIGGER -> {
-                String logicText = conditions.size() <= 1 ? "" : "  " + tr("AND".equals(conditionLogic) ? "item_get.editor.logic_all" : "item_get.editor.logic_any");
-                g.drawString(font, Component.translatable("item_get.editor.section.trigger").getString() + logicText, formX, y, 0xD8D8D8);
+                g.drawString(font, Component.translatable("item_get.editor.section.trigger"), formX, y, 0xD8D8D8);
                 int cy = top + 30;
                 for (ConditionDraft c : conditions) {
                     if (c.input == null) continue;
                     if (c.count != null) g.drawString(font, Component.translatable("item_get.editor.count"), formX, c.count.getY() + 6, 0xAFC4D8);
                     cy += counted(c.type) ? h * 2 + 7 : h + 8;
                 }
+                drawFormScrollbar(g);
             }
             case DISPLAY -> g.drawString(font, Component.translatable("item_get.editor.section.look"), formX, y, 0xD8D8D8);
             case AUDIO -> g.drawString(font, Component.translatable("item_get.editor.sound_current", soundName()), formX, y, 0xAFC4D8);
-            case PONDER -> g.drawString(font, Component.translatable("item_get.editor.ponder_current", ponderName()), formX, y, 0xAFC4D8);
+            case PONDER -> g.drawString(font, Component.translatable("item_get.editor.integration_current", ponderName()), formX, y, 0xAFC4D8);
             case DEBUG -> g.drawString(font, ManagerScreen.displaySubtitle(rule, Util.getMillis()), formX, y, 0xAFC4D8);
         }
     }
@@ -533,7 +563,7 @@ public final class RuleEditorScreen extends CrispScreen {
     private void drawConditionIcons(GuiGraphics g, int mx, int my) {
         for (ConditionDraft c : conditions) {
             if (c.input == null) continue;
-            int x = c.input.getX() + c.input.getWidth() + 3, y = c.input.getY() - 2;
+            int x = Math.min(formX + formW - 46, c.input.getX() + c.input.getWidth() + 1), y = c.input.getY() - 2;
             ItemStack stack = conditionIcon(c);
             if (!stack.isEmpty()) g.renderItem(stack, x + 2, y + 2);
             if (mx >= x && mx <= x + 20 && my >= y && my <= y + 20) g.renderTooltip(font, Component.translatable("item_get.editor.choose_item"), mx, my);
@@ -620,6 +650,28 @@ public final class RuleEditorScreen extends CrispScreen {
         return index >= 0 && index < Section.values().length ? index : -1;
     }
     private int maxNavScroll() { return Math.max(0, Section.values().length * row - (navBottom() - navTop())); }
+    private int formViewportTop() { return top + (section == Section.TRIGGER && conditions.size() > 1 ? 58 : 30); }
+    private int formViewportBottom() { return height - (height < 300 ? 18 : 20) - 44; }
+    private int conditionRowHeight(ConditionDraft c) {
+        int h = height < 300 ? 18 : 20, gap = height < 300 ? 6 : 8;
+        return counted(c.type) ? h * 2 + 7 + gap : h + gap;
+    }
+    private int triggerContentHeight() {
+        int h = height < 300 ? 18 : 20, total = h;
+        for (ConditionDraft c : conditions) total += conditionRowHeight(c);
+        return total;
+    }
+    private int maxFormScroll() { return Math.max(0, triggerContentHeight() - Math.max(1, formViewportBottom() - formViewportTop())); }
+    private void drawFormScrollbar(GuiGraphics g) {
+        int max = maxFormScroll();
+        if (max <= 0) return;
+        int topY = formViewportTop(), bottomY = formViewportBottom(), track = bottomY - topY;
+        int thumb = Math.max(14, track * track / (track + max));
+        int thumbY = topY + (track - thumb) * Math.max(0, Math.min(max, formScroll)) / max;
+        int x = formX + formW + 4;
+        g.fill(x, topY, x + 1, bottomY, 0x447D6846);
+        g.fill(x - 1, thumbY, x + 2, thumbY + thumb, 0xAA7D6846);
+    }
     private String soundName() { return rule.sound == null || rule.sound.isBlank() ? "item_get:item_acquired" : rule.sound; }
     private int maxPreviewScroll() {
         int w = Math.max(105, Math.min(previewW - 10, 260)), h = previewW < 180 ? 82 : 104;
@@ -687,7 +739,7 @@ public final class RuleEditorScreen extends CrispScreen {
         TRIGGER("item_get.editor.tab.trigger"),
         DISPLAY("item_get.editor.tab.display"),
         AUDIO("item_get.editor.tab.audio"),
-        PONDER("item_get.editor.tab.ponder"),
+        PONDER("item_get.editor.tab.integration"),
         DEBUG("item_get.editor.tab.debug");
 
         private final String key;

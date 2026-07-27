@@ -29,6 +29,10 @@ sourceSets.main.resources {
 
 repositories {
     // Add here additional repositories if required by some of the dependencies below.
+    maven {
+        name = "Jared's Maven"
+        url = "https://maven.blamejared.com/"
+    }
 }
 
 base {
@@ -122,6 +126,8 @@ configurations {
 dependencies {
     implementation "javazoom:jlayer:1.0.1"
     shade "javazoom:jlayer:1.0.1"
+    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:19.42.0.379"
+    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:19.42.0.379"
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
     // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"

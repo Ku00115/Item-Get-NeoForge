@@ -96,6 +96,17 @@ public final class SideReminderOverlay {
         return false;
     }
 
+    public static boolean openLatestJei() {
+        if (!ClientHooks.hasJei()) return false;
+        for (var it = ENTRIES.descendingIterator(); it.hasNext();) {
+            Entry entry = it.next();
+            if (entry.exiting) continue;
+            var stack = ManagerScreen.jeiStack(entry.rule);
+            if (!stack.isEmpty() && ClientHooks.openJei(stack, ManagerScreen.jeiMode(entry.rule))) return true;
+        }
+        return false;
+    }
+
     public static boolean openLatestPonderer() {
         for (var it = ENTRIES.descendingIterator(); it.hasNext();) {
             Entry entry = it.next();

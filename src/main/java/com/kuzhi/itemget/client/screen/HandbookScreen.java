@@ -9,6 +9,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import net.minecraft.Util;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,8 @@ public final class HandbookScreen extends CrispScreen {
     private EditBox search;
     private String query = "";
     private Filter filter = Filter.ALL;
-    private SortMode sortMode = SortMode.TIME;
+    private SortField sortField = SortField.TIME;
+    private boolean sortDescending = true;
     private int page;
     private int selectedIndex = -1;
     private int detailScroll;
@@ -77,7 +79,12 @@ public final class HandbookScreen extends CrispScreen {
             return true;
         }
         if (sortHit(x, y)) {
-            sortMode = sortMode == SortMode.TIME ? SortMode.AZ : SortMode.TIME;
+            sortField = sortField == SortField.TIME ? SortField.NAME : SortField.TIME;
+            rebuildVisible(true);
+            return true;
+        }
+        if (sortDirectionHit(x, y)) {
+            sortDescending = !sortDescending;
             rebuildVisible(true);
             return true;
         }
@@ -94,12 +101,12 @@ public final class HandbookScreen extends CrispScreen {
             openPonder(visibleHistory.get(ponderEntry.index()), ponderEntry.kind());
             return true;
         }
-        PonderKind detailPonder = detailPonderAt(x, y);
-        if (detailPonder != PonderKind.NONE && selectedRule() != null) {
+        LinkKind detailPonder = detailPonderAt(x, y);
+        if (detailPonder != LinkKind.NONE && selectedRule() != null) {
             openPonder(selectedRule(), detailPonder);
             return true;
         }
-        if (detailHit(x, y) && selectedRule() != null) {
+        if (detailHit(x, y) && selectedRule() != null && isUnlocked(selectedRule())) {
             minecraft.setScreen(new ReminderScreen(selectedRule(), this));
             return true;
         }
@@ -195,7 +202,8 @@ public final class HandbookScreen extends CrispScreen {
             int cx = x + 3 + font.width(clipped);
             g.fill(cx, y + 3, cx + 1, y + 12, 0xFF3C2A1E);
         }
-        drawTextButton(g, sortX(), y - 1, sortWidth(), 14, Component.translatable(sortMode.key).getString(), sortHit(mx, my));
+        drawTextButton(g, sortX(), y - 1, sortButtonSize(), 14, sortField.label, sortHit(mx, my));
+        drawTextButton(g, sortDirectionX(), y - 1, sortButtonSize(), 14, sortDescending ? "\u2193" : "\u2191", sortDirectionHit(mx, my));
     }
 
     private void renderList(GuiGraphics g, int mx, int my) {
@@ -203,42 +211,48 @@ public final class HandbookScreen extends CrispScreen {
         int left = leftPageLeft(), right = leftPageRight(), y = listTop();
         for (int index = start; index < end; index++, y += ROW_H) {
             ReminderRule rule = visibleHistory.get(index);
+            boolean unlocked = isUnlocked(rule);
             boolean selected = index == selectedIndex, hover = mx >= left && mx <= right && my >= y && my < y + ROW_H - 3;
             if (selected || hover) g.fill(left - 3, y - 2, right + 2, y + ROW_H - 4, selected ? 0x66513A28 : 0x33FFFFFF);
             drawIconFrame(g, left + 2, y + 4, 20);
-            boolean image = ConfigIconLibrary.render(g, rule, left + 11, y + 14, .82F);
-            if (!image) {
+            boolean image = unlocked && ConfigIconLibrary.render(g, rule, left + 11, y + 14, .82F);
+            if (!image && unlocked) {
                 g.pose().pushPose();
                 g.pose().translate(left + 11, y + 14, 0);
                 g.pose().scale(.82F, .82F, 1);
                 g.renderItem(ManagerScreen.displayStack(rule), -8, -8);
                 g.pose().popPose();
             }
-            List<PonderKind> ponderKinds = availablePonderKinds(rule);
-            int textLeft = left + 25, textRight = right - (ponderKinds.isEmpty() ? 2 : ponderKinds.size() * 19 + 3);
-            g.drawString(font, font.plainSubstrByWidth(titleOf(rule), Math.max(30, textRight - textLeft)), textLeft, y + 2, 0x3C2A1E, false);
-            g.drawString(font, font.plainSubstrByWidth(ManagerScreen.displaySubtitle(rule, Util.getMillis() - openedAt).getString(), Math.max(30, textRight - textLeft)), textLeft, y + 13, 0x6A5A3A, false);
-            drawPonderButtons(g, ponderKinds, right, y + 5, mx, my);
+            if (!unlocked) drawLockMark(g, left + 7, y + 8, 0x6A5A3A);
+            List<LinkKind> linkKinds = availableLinkKinds(rule);
+            int textLeft = left + 25, textRight = right - (linkKinds.isEmpty() ? 2 : linkKinds.size() * 19 + 3);
+            g.drawString(font, font.plainSubstrByWidth(listTitleOf(rule), Math.max(30, textRight - textLeft)), textLeft, y + 2, unlocked ? 0x3C2A1E : 0x76614A, false);
+            g.drawString(font, font.plainSubstrByWidth(subtitleOf(rule).getString(), Math.max(30, textRight - textLeft)), textLeft, y + 13, unlocked ? 0x6A5A3A : 0x8A7655, false);
+            drawLinkButtons(g, linkKinds, right, y + 5, mx, my);
         }
     }
 
     private void renderDetail(GuiGraphics g, int mx, int my) {
         ReminderRule rule = selectedRule();
         if (rule == null) return;
+        boolean unlocked = isUnlocked(rule);
         int left = rightPageLeft(), top = detailTop(), right = rightPageRight();
         int iconSize = 42, iconX = left + 14, iconY = top + 6;
         drawIconFrame(g, iconX, iconY, iconSize);
-        boolean image = ConfigIconLibrary.render(g, rule, iconX + iconSize / 2, iconY + iconSize / 2, 1.35F);
-        if (!image) {
+        boolean image = unlocked && ConfigIconLibrary.render(g, rule, iconX + iconSize / 2, iconY + iconSize / 2, 1.35F);
+        if (!image && unlocked) {
             g.pose().pushPose();
             g.pose().translate(iconX + iconSize / 2, iconY + iconSize / 2, 0);
             g.pose().scale(1.35F, 1.35F, 1);
             g.renderItem(ManagerScreen.displayStack(rule), -8, -8);
             g.pose().popPose();
         }
+        if (!unlocked) drawLockMark(g, iconX + 15, iconY + 13, 0x6A5A3A);
         int textLeft = iconX + iconSize + 10, textW = Math.max(40, right - textLeft - 4);
-        g.drawString(font, font.plainSubstrByWidth(titleOf(rule), textW), textLeft, top + 15, 0x3C2A1E, false);
-        g.drawString(font, font.plainSubstrByWidth(ManagerScreen.displaySubtitle(rule, Util.getMillis() - openedAt).getString(), textW), textLeft, top + 28, 0x6A5A3A, false);
+        g.drawString(font, font.plainSubstrByWidth(titleOf(rule), textW), textLeft, top + 12, unlocked ? 0x3C2A1E : 0x76614A, false);
+        g.drawString(font, font.plainSubstrByWidth(subtitleOf(rule).getString(), textW), textLeft, top + 25, unlocked ? 0x6A5A3A : 0x8A7655, false);
+        String meta = metadataOf(rule);
+        if (!meta.isBlank()) g.drawString(font, font.plainSubstrByWidth(meta, textW), textLeft, top + 38, 0x8A7655, false);
         int textTop = detailTextTop();
         List<FormattedCharSequence> lines = detailLines();
         int maxLines = Math.max(1, (bookBottom() - textTop - 34) / 11);
@@ -250,8 +264,8 @@ public final class HandbookScreen extends CrispScreen {
             g.fill(right - 3, textTop, right - 2, textTop + track, 0x447D6846);
             g.fill(right - 4, thumbY, right - 1, thumbY + thumb, 0xAA7D6846);
         }
-        drawTextButton(g, left + 4, bookBottom() - 23, 42, 14, Component.translatable("item_get.handbook.detail").getString(), detailHit(mx, my));
-        drawDetailPonderButtons(g, availablePonderKinds(rule), mx, my);
+        if (unlocked) drawTextButton(g, left + 4, bookBottom() - 23, 42, 14, Component.translatable("item_get.handbook.detail").getString(), detailHit(mx, my));
+        drawDetailLinkButtons(g, availableLinkKinds(rule), mx, my);
     }
 
     private void renderPageButtons(GuiGraphics g, int mx, int my) {
@@ -285,7 +299,7 @@ public final class HandbookScreen extends CrispScreen {
         g.fill(mid - 2, top, mid + 3, bottom, 0x33513A28);
     }
 
-    private void drawPonderButtons(GuiGraphics g, List<PonderKind> kinds, int right, int y, int mx, int my) {
+    private void drawLinkButtons(GuiGraphics g, List<LinkKind> kinds, int right, int y, int mx, int my) {
         int start = right - kinds.size() * 19;
         for (int i = 0; i < kinds.size(); i++) {
             int x = start + i * 19;
@@ -293,12 +307,12 @@ public final class HandbookScreen extends CrispScreen {
         }
     }
 
-    private void drawDetailPonderButtons(GuiGraphics g, List<PonderKind> kinds, int mx, int my) {
+    private void drawDetailLinkButtons(GuiGraphics g, List<LinkKind> kinds, int mx, int my) {
         if (kinds.isEmpty()) return;
-        int y = bookBottom() - 23, x = detailPonderStart(kinds);
-        for (PonderKind kind : kinds) {
+        int y = bookBottom() - 23, x = detailLinkStart(kinds);
+        for (LinkKind kind : kinds) {
             int w = kind.detailWidth;
-            drawTextButton(g, x, y, w, 14, kind.detailLabel, detailPonderHit(mx, my, kind, x, y, w));
+            drawTextButton(g, x, y, w, 14, kind.detailLabel, detailLinkHit(mx, my, kind, x, y, w));
             x += w + 4;
         }
     }
@@ -323,6 +337,13 @@ public final class HandbookScreen extends CrispScreen {
         g.fill(x + 2, y + 2, x + size - 2, y + 3, 0x44FFFFFF);
     }
 
+    private void drawLockMark(GuiGraphics g, int x, int y, int color) {
+        g.fill(x + 3, y + 7, x + 12, y + 16, color);
+        g.fill(x + 4, y + 5, x + 6, y + 8, color);
+        g.fill(x + 9, y + 5, x + 11, y + 8, color);
+        g.fill(x + 5, y + 3, x + 10, y + 5, color);
+    }
+
     private void rebuildVisible() {
         rebuildVisible(false);
     }
@@ -331,7 +352,10 @@ public final class HandbookScreen extends CrispScreen {
         visibleHistory.clear();
         String q = query.trim().toLowerCase(Locale.ROOT);
         for (ReminderRule rule : history) if (filter.matches(rule) && (q.isEmpty() || matches(rule, q))) visibleHistory.add(rule);
-        if (sortMode == SortMode.AZ) visibleHistory.sort(java.util.Comparator.<ReminderRule, String>comparing(this::titleOf, String.CASE_INSENSITIVE_ORDER).thenComparingInt(history::indexOf));
+        java.util.Comparator<ReminderRule> comparator = sortField == SortField.NAME
+                ? java.util.Comparator.<ReminderRule, String>comparing(this::listTitleOf, String.CASE_INSENSITIVE_ORDER).thenComparingInt(this::orderOf)
+                : java.util.Comparator.comparingInt(this::timeOrderOf);
+        visibleHistory.sort(sortDescending ? comparator.reversed() : comparator);
         if (resetPosition) {
             page = 0;
             selectedIndex = -1;
@@ -342,9 +366,16 @@ public final class HandbookScreen extends CrispScreen {
     }
 
     private boolean matches(ReminderRule rule, String q) {
-        String text = (titleOf(rule) + "\n" + TranslatedText.resolve(rule.description) + "\n" + ManagerScreen.displaySubtitle(rule, 0).getString() + "\n" + rule.id + "\n" + rule.triggerType + "\n" + rule.trigger + "\n" + rule.ponderTarget).toLowerCase(Locale.ROOT);
+        String text = (titleOf(rule) + "\n" + descriptionOf(rule) + "\n" + subtitleOf(rule).getString() + "\n" + nullToEmpty(rule.entryNumber) + "\n" + nullToEmpty(rule.category) + "\n" + nullToEmpty(rule.group) + "\n" + rule.id).toLowerCase(Locale.ROOT);
         return text.contains(q);
     }
+    private int orderOf(ReminderRule rule) {
+        int order = handbookOrder(rule);
+        if (order >= 0) return order;
+        return rule.sort != 0 ? rule.sort : history.indexOf(rule);
+    }
+    private int timeOrderOf(ReminderRule rule) { int order = handbookOrder(rule); return order >= 0 ? order : (sortDescending ? Integer.MIN_VALUE : Integer.MAX_VALUE); }
+    private int handbookOrder(ReminderRule rule) { return rule.trigger != null && rule.trigger.has("_handbook_order") ? rule.trigger.get("_handbook_order").getAsInt() : -1; }
 
     private void ensureSelection() {
         if (visibleHistory.isEmpty()) {
@@ -369,7 +400,7 @@ public final class HandbookScreen extends CrispScreen {
     private PonderHit ponderAt(double x, double y) {
         int index = rowAt(x, y);
         if (index < 0) return null;
-        List<PonderKind> kinds = availablePonderKinds(visibleHistory.get(index));
+        List<LinkKind> kinds = availableLinkKinds(visibleHistory.get(index));
         if (kinds.isEmpty()) return null;
         int rowY = listTop() + (index - page * pageSize()) * ROW_H;
         int start = leftPageRight() - kinds.size() * 19, by = rowY + 5;
@@ -398,40 +429,89 @@ public final class HandbookScreen extends CrispScreen {
     private boolean previousHit(double x, double y) { return x >= leftPageLeft() && x <= leftPageLeft() + 18 && y >= bookBottom() - 22 && y <= bookBottom() - 8; }
     private boolean nextHit(double x, double y) { return x >= leftPageRight() - 18 && x <= leftPageRight() && y >= bookBottom() - 22 && y <= bookBottom() - 8; }
     private boolean detailHit(double x, double y) { return x >= rightPageLeft() + 4 && x <= rightPageLeft() + 46 && y >= bookBottom() - 23 && y <= bookBottom() - 9; }
-    private boolean sortHit(double x, double y) { return x >= sortX() && x <= sortX() + sortWidth() && y >= bookTop() + 13 && y <= bookTop() + 27; }
-    private PonderKind detailPonderAt(double x, double y) {
+    private boolean sortHit(double x, double y) { return x >= sortX() && x <= sortX() + sortButtonSize() && y >= bookTop() + 13 && y <= bookTop() + 27; }
+    private boolean sortDirectionHit(double x, double y) { return x >= sortDirectionX() && x <= sortDirectionX() + sortButtonSize() && y >= bookTop() + 13 && y <= bookTop() + 27; }
+    private LinkKind detailPonderAt(double x, double y) {
         ReminderRule rule = selectedRule();
-        if (rule == null) return PonderKind.NONE;
-        List<PonderKind> kinds = availablePonderKinds(rule);
-        int py = bookBottom() - 23, px = detailPonderStart(kinds);
-        for (PonderKind kind : kinds) {
+        if (rule == null) return LinkKind.NONE;
+        List<LinkKind> kinds = availableLinkKinds(rule);
+        int py = bookBottom() - 23, px = detailLinkStart(kinds);
+        for (LinkKind kind : kinds) {
             int w = kind.detailWidth;
-            if (detailPonderHit(x, y, kind, px, py, w)) return kind;
+            if (detailLinkHit(x, y, kind, px, py, w)) return kind;
             px += w + 4;
         }
-        return PonderKind.NONE;
+        return LinkKind.NONE;
     }
-    private boolean detailPonderHit(double x, double y, PonderKind kind, int px, int py, int w) { return kind != PonderKind.NONE && x >= px && x <= px + w && y >= py && y <= py + 14; }
-    private int detailPonderStart(List<PonderKind> kinds) {
+    private boolean detailLinkHit(double x, double y, LinkKind kind, int px, int py, int w) { return kind != LinkKind.NONE && x >= px && x <= px + w && y >= py && y <= py + 14; }
+    private int detailLinkStart(List<LinkKind> kinds) {
         int total = -4;
-        for (PonderKind kind : kinds) total += kind.detailWidth + 4;
+        for (LinkKind kind : kinds) total += kind.detailWidth + 4;
         return rightPageRight() - Math.max(0, total) - 6;
     }
-    private static boolean hasPonder(ReminderRule rule) { return rule.ponderTarget != null && !rule.ponderTarget.isBlank(); }
-    private List<PonderKind> availablePonderKinds(ReminderRule rule) {
-        if (!hasPonder(rule)) return List.of();
-        boolean create = ClientHooks.hasCreatePonderScene(rule.ponderTarget), ponderer = ClientHooks.hasPondererScene(rule.ponderTarget);
-        if (create && ponderer) return List.of(PonderKind.CREATE, PonderKind.PONDERER);
-        if (create) return List.of(PonderKind.CREATE);
-        if (ponderer) return List.of(PonderKind.PONDERER);
-        return List.of();
+    private static boolean hasPonder(ReminderRule rule) { return isUnlocked(rule) && rule.ponderTarget != null && !rule.ponderTarget.isBlank(); }
+    private List<LinkKind> availableLinkKinds(ReminderRule rule) {
+        boolean unlocked = isUnlocked(rule);
+        if (!unlocked) {
+            ClientHooks.logJeiButtonState(rule, false, false, ItemStack.EMPTY);
+            return List.of();
+        }
+        List<LinkKind> out = new ArrayList<>();
+        boolean hasJei = ClientHooks.hasJei();
+        ItemStack jeiStack = ManagerScreen.jeiStack(rule);
+        ClientHooks.logJeiButtonState(rule, true, hasJei, jeiStack);
+        if (hasJei && !jeiStack.isEmpty()) out.add(LinkKind.JEI);
+        if (hasPonder(rule)) {
+            if (ClientHooks.hasCreatePonderScene(rule.ponderTarget)) out.add(LinkKind.CREATE);
+            if (ClientHooks.hasPondererScene(rule.ponderTarget)) out.add(LinkKind.PONDERER);
+        }
+        return out;
     }
-    private void openPonder(ReminderRule rule, PonderKind kind) {
-        if (kind == PonderKind.CREATE) ClientHooks.openCreatePonder(rule.ponderTarget);
-        else if (kind == PonderKind.PONDERER) ClientHooks.openPonderer(rule.ponderTarget);
+    private void openPonder(ReminderRule rule, LinkKind kind) {
+        if (kind == LinkKind.JEI) ClientHooks.openJei(ManagerScreen.jeiStack(rule), ManagerScreen.jeiMode(rule));
+        else if (kind == LinkKind.CREATE) ClientHooks.openCreatePonder(rule.ponderTarget);
+        else if (kind == LinkKind.PONDERER) ClientHooks.openPonderer(rule.ponderTarget);
     }
-    private String titleOf(ReminderRule rule) { String value = rule.title == null || rule.title.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : TranslatedText.resolve(rule.title); return value.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : value; }
-    private List<FormattedCharSequence> detailLines() { ReminderRule rule = selectedRule(); return rule == null ? List.of() : font.split(Component.literal(TranslatedText.resolve(rule.description)), pageWidth() - 14); }
+    private static boolean isUnlocked(ReminderRule rule) {
+        return rule == null || rule.trigger == null || !rule.trigger.has("_handbook_unlocked") || rule.trigger.get("_handbook_unlocked").getAsBoolean();
+    }
+    private String titleOf(ReminderRule rule) {
+        if (!isUnlocked(rule)) {
+            String value = TranslatedText.resolve(rule.lockedTitle);
+            if (value.isBlank()) value = Component.translatable("item_get.handbook.locked.title").getString();
+            return value;
+        }
+        String value = rule.title == null || rule.title.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : TranslatedText.resolve(rule.title);
+        return value.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : value;
+    }
+    private String listTitleOf(ReminderRule rule) {
+        String title = titleOf(rule);
+        String number = nullToEmpty(rule.entryNumber).trim();
+        return number.isBlank() ? title : number + "  " + title;
+    }
+    private Component subtitleOf(ReminderRule rule) {
+        if (!isUnlocked(rule)) {
+            String value = TranslatedText.resolve(rule.lockedSubtitle);
+            return value.isBlank() ? Component.translatable("item_get.handbook.locked.subtitle") : Component.literal(value);
+        }
+        return ManagerScreen.displaySubtitle(rule, Util.getMillis() - openedAt);
+    }
+    private String descriptionOf(ReminderRule rule) {
+        if (!isUnlocked(rule)) {
+            String value = TranslatedText.resolve(rule.lockedDescription);
+            return value.isBlank() ? Component.translatable("item_get.handbook.locked.description").getString() : value;
+        }
+        return TranslatedText.resolve(rule.description);
+    }
+    private String metadataOf(ReminderRule rule) {
+        List<String> parts = new ArrayList<>();
+        if (!nullToEmpty(rule.entryNumber).isBlank()) parts.add(rule.entryNumber.trim());
+        if (!nullToEmpty(rule.category).isBlank()) parts.add(TranslatedText.resolve(rule.category).trim());
+        if (!nullToEmpty(rule.group).isBlank()) parts.add(TranslatedText.resolve(rule.group).trim());
+        return String.join(" / ", parts);
+    }
+    private static String nullToEmpty(String value) { return value == null ? "" : value; }
+    private List<FormattedCharSequence> detailLines() { ReminderRule rule = selectedRule(); return rule == null ? List.of() : font.split(Component.literal(descriptionOf(rule)), pageWidth() - 14); }
     private int detailTextTop() { return detailTop() + 78; }
     private int detailMaxLines() { return Math.max(1, (bookBottom() - detailTextTop() - 30) / 11); }
     private int maxDetailScroll() { return maxDetailScroll(detailLines(), detailMaxLines()); }
@@ -461,9 +541,12 @@ public final class HandbookScreen extends CrispScreen {
     private int maxTabScroll() { return Math.max(0, Filter.values().length * (TAB_H + 3) - 3 - (tabViewportBottom() - tabViewportTop())); }
     private int tabPageStep() { return Math.max(TAB_H + 3, ((tabViewportBottom() - tabViewportTop()) / (TAB_H + 3)) * (TAB_H + 3)); }
     private int searchX() { return leftPageLeft(); }
-    private int searchWidth() { return Math.max(55, pageWidth() - sortWidth() - 10); }
-    private int sortWidth() { return 38; }
+    private int searchWidth() { return Math.max(55, pageWidth() - sortButtonsWidth() - 10); }
+    private int sortButtonSize() { return 16; }
+    private int sortButtonsWidth() { return sortButtonSize() * 2 + 4; }
+    private int sortWidth() { return sortButtonsWidth(); }
     private int sortX() { return searchX() + searchWidth() + 6; }
+    private int sortDirectionX() { return sortX() + sortButtonSize() + 4; }
     private static float progress(long started, int duration) { return Math.min(1F, Math.max(0F, (Util.getMillis() - started) / (float) duration)); }
     private static float ease(float t) { float inv = 1F - t; return 1F - inv * inv * inv; }
     private static int brighten(int color) {
@@ -504,32 +587,33 @@ public final class HandbookScreen extends CrispScreen {
                 case WORLD -> type == TriggerType.WEATHER_IS || type == TriggerType.TIME_IS || type == TriggerType.ENTER_BIOME || type == TriggerType.ENTER_STRUCTURE || type == TriggerType.DIMENSION_CHANGED || type == TriggerType.MANUAL;
                 case PLAYER -> type == TriggerType.HEALTH_AT || type == TriggerType.HUNGER_AT || type == TriggerType.EFFECT_GAINED || type == TriggerType.DEATH_BY || type == TriggerType.OBSERVE_BLOCK || type == TriggerType.HOVER_ITEM;
                 case ADVANCEMENT -> type == TriggerType.ADVANCEMENT_DONE;
-                case PONDER -> ClientHooks.hasPonderScene(rule.ponderTarget);
+                case PONDER -> isUnlocked(rule) && ClientHooks.hasPonderScene(rule.ponderTarget);
             };
         }
     }
 
-    private enum SortMode {
-        TIME("item_get.handbook.sort.time"),
-        AZ("item_get.handbook.sort.az");
-        private final String key;
-        SortMode(String key) { this.key = key; }
+    private enum SortField {
+        TIME("T"),
+        NAME("A");
+        private final String label;
+        SortField(String label) { this.label = label; }
     }
 
-    private enum PonderKind {
+    private enum LinkKind {
         NONE("", "", 0),
+        JEI("J", "JEI", 28),
         CREATE("C", "Create", 46),
         PONDERER("P", "Ponderer", 58);
 
         private final String shortLabel;
         private final String detailLabel;
         private final int detailWidth;
-        PonderKind(String shortLabel, String detailLabel, int detailWidth) {
+        LinkKind(String shortLabel, String detailLabel, int detailWidth) {
             this.shortLabel = shortLabel;
             this.detailLabel = detailLabel;
             this.detailWidth = detailWidth;
         }
     }
 
-    private record PonderHit(int index, PonderKind kind) {}
+    private record PonderHit(int index, LinkKind kind) {}
 }

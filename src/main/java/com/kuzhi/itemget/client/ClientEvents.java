@@ -20,6 +20,7 @@ import org.lwjgl.glfw.GLFW;
 public final class ClientEvents {
     public static final KeyMapping OPEN = new KeyMapping("key.item_get.manager", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.item_get");
     public static final KeyMapping HANDBOOK = new KeyMapping("key.item_get.handbook", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, "key.categories.item_get");
+    public static final KeyMapping JEI = new KeyMapping("key.item_get.open_jei", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_J, "key.categories.item_get");
     public static final KeyMapping PONDER = new KeyMapping("key.item_get.open_ponder", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_P, "key.categories.item_get");
     public static final KeyMapping CREATE_PONDER = new KeyMapping("key.item_get.open_create_ponder", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, "key.categories.item_get");
     public static final KeyMapping CLOSE = new KeyMapping("key.item_get.close_reminder", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "key.categories.item_get");
@@ -31,7 +32,7 @@ public final class ClientEvents {
 
     @EventBusSubscriber(modid = ItemGet.MOD_ID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
     public static final class ModBus {
-        @SubscribeEvent public static void keys(RegisterKeyMappingsEvent event) { event.register(OPEN); event.register(HANDBOOK); event.register(PONDER); event.register(CREATE_PONDER); event.register(CLOSE); }
+        @SubscribeEvent public static void keys(RegisterKeyMappingsEvent event) { event.register(OPEN); event.register(HANDBOOK); event.register(JEI); event.register(PONDER); event.register(CREATE_PONDER); event.register(CLOSE); }
     }
 
     @EventBusSubscriber(modid = ItemGet.MOD_ID, value = Dist.CLIENT)
@@ -42,6 +43,7 @@ public final class ClientEvents {
             ObservationTracker.tick();
             if (OPEN.consumeClick()) ItemGetNetwork.requestRules();
             if (HANDBOOK.consumeClick() && !SideReminderOverlay.openLatestDetail()) openHandbook();
+            if (JEI.consumeClick()) SideReminderOverlay.openLatestJei();
             if (PONDER.consumeClick()) SideReminderOverlay.openLatestPonder();
             if (CREATE_PONDER.consumeClick()) SideReminderOverlay.openLatestCreatePonder();
         }

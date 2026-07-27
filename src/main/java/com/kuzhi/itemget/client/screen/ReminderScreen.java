@@ -13,6 +13,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FormattedCharSequence;
+import org.lwjgl.glfw.GLFW;
 
 public final class ReminderScreen extends Screen {
     private static final ResourceLocation ITEM_GLOW = ResourceLocation.fromNamespaceAndPath("item_get", "textures/gui/item_glow.png");
@@ -35,21 +36,20 @@ public final class ReminderScreen extends Screen {
             soundPlayed = true;
             if (rule.sound != null && !rule.sound.isBlank()) AudioHelper.play(rule.sound);
         }
-        if (canOpenPonder()) {
-            int cx = width / 2, cy = height / 2 - 8, panelWidth = Math.min(350, width - 26), right = cx + panelWidth / 2, bottom = Math.min(height - 10, cy + 56);
-            if (canOpenCreatePonder() && canOpenPonderer()) {
-                addRenderableWidget(Button.builder(Component.translatable("item_get.editor.open_create_ponder"), b -> openCreatePonder()).bounds(right - 136, bottom - 22, 64, 18).build());
-                addRenderableWidget(Button.builder(Component.translatable("item_get.editor.open_ponderer"), b -> openPonderer()).bounds(right - 68, bottom - 22, 64, 18).build());
-            } else {
-                Component label = canOpenCreatePonder() ? Component.translatable("item_get.editor.open_create_ponder") : Component.translatable("item_get.editor.open_ponderer");
-                addRenderableWidget(Button.builder(label, b -> openPonder()).bounds(right - 86, bottom - 22, 82, 18).build());
-            }
-        }
+        addIntegrationButtons();
     }
 
     @Override public void tick() { ticks++; }
     @Override public boolean isPauseScreen() { return rule.pauseSingleplayer && minecraft != null && minecraft.hasSingleplayerServer(); }
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            close();
+            return true;
+        }
+        if (ClientEvents.JEI.matches(key, scan) && canOpenJei()) {
+            openJei();
+            return true;
+        }
         if (ClientEvents.CREATE_PONDER.matches(key, scan) && canOpenCreatePonder()) {
             openCreatePonder();
             return true;
@@ -62,9 +62,16 @@ public final class ReminderScreen extends Screen {
             close();
             return true;
         }
+        return super.keyPressed(key, scan, modifiers);
+    }
+    @Override public boolean mouseClicked(double x, double y, int button) {
+        if (super.mouseClicked(x, y, button)) return true;
+        if (button == 0) {
+            if (!insidePanel(x, y)) close();
+            return true;
+        }
         return false;
     }
-    @Override public boolean mouseClicked(double x, double y, int button) { return super.mouseClicked(x, y, button); }
     @Override public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
         if (elapsed() < typewriterEnd()) return true;
         if (maxDescriptionScroll > 0) {
@@ -114,12 +121,26 @@ public final class ReminderScreen extends Screen {
     }
 
     private String actionHint() {
-        StringBuilder text = new StringBuilder("【");
+        StringBuilder text = new StringBuilder();
         text.append(ClientEvents.CLOSE.getTranslatedKeyMessage().getString()).append(Component.translatable("item_get.hint.close").getString());
+        if (canOpenJei()) text.append("  ").append(ClientEvents.JEI.getTranslatedKeyMessage().getString()).append(Component.translatable("item_get.hint.jei").getString());
         if (canOpenCreatePonder()) text.append("  ").append(ClientEvents.CREATE_PONDER.getTranslatedKeyMessage().getString()).append(Component.translatable("item_get.hint.create_ponder").getString());
         if (canOpenPonderer()) text.append("  ").append(ClientEvents.PONDER.getTranslatedKeyMessage().getString()).append(Component.translatable("item_get.hint.ponderer").getString());
-        text.append("】");
-        return text.toString();
+        return Component.translatable("item_get.hint.actions", text.toString()).getString();
+    }
+
+    private void addIntegrationButtons() {
+        int count = (canOpenJei() ? 1 : 0) + (canOpenCreatePonder() ? 1 : 0) + (canOpenPonderer() ? 1 : 0);
+        if (count <= 0) return;
+        int cx = width / 2, cy = height / 2 - 8, panelWidth = Math.min(350, width - 26), right = cx + panelWidth / 2, bottom = Math.min(height - 10, cy + 56);
+        int gap = 4, h = 18, total = (count - 1) * gap;
+        if (canOpenJei()) total += 42;
+        if (canOpenCreatePonder()) total += 54;
+        if (canOpenPonderer()) total += 68;
+        int x = Math.max(6, right - total - 4);
+        if (canOpenJei()) { addRenderableWidget(Button.builder(Component.translatable("item_get.editor.open_jei"), b -> openJei()).bounds(x, bottom - 22, 42, h).build()); x += 42 + gap; }
+        if (canOpenCreatePonder()) { addRenderableWidget(Button.builder(Component.translatable("item_get.editor.open_create_ponder"), b -> openCreatePonder()).bounds(x, bottom - 22, 54, h).build()); x += 54 + gap; }
+        if (canOpenPonderer()) addRenderableWidget(Button.builder(Component.translatable("item_get.editor.open_ponderer"), b -> openPonderer()).bounds(x, bottom - 22, 68, h).build());
     }
 
     private void pushScale(GuiGraphics g, int cx, int cy, float scale) { g.pose().pushPose(); g.pose().translate(cx, cy, 100); g.pose().scale(scale, scale, 1); g.pose().translate(-cx, -cy, 0); }
@@ -129,12 +150,17 @@ public final class ReminderScreen extends Screen {
     private void drawCentered(GuiGraphics g, String text, int x, int y, int rgb, float alpha) { if (text == null || text.isBlank() || alpha <= 0) return; g.drawCenteredString(font, text, x, y, color(rgb, alpha)); }
     private void drawCentered(GuiGraphics g, Component text, int x, int y, int rgb, float alpha) { if (alpha <= 0) return; g.drawCenteredString(font, text, x, y, color(rgb, alpha)); }
     private void drawCentered(GuiGraphics g, FormattedCharSequence text, int x, int y, int rgb, float alpha) { if (alpha <= 0) return; g.drawCenteredString(font, text, x, y, color(rgb, alpha)); }
-    private boolean canOpenPonder() { return ClientHooks.hasPonderScene(rule.ponderTarget); }
+    private boolean canOpenJei() { return ClientHooks.hasJei() && ManagerScreen.hasJeiTarget(rule); }
     private boolean canOpenCreatePonder() { return ClientHooks.hasCreatePonderScene(rule.ponderTarget); }
     private boolean canOpenPonderer() { return ClientHooks.hasPondererScene(rule.ponderTarget); }
-    private void openPonder() { ClientHooks.openPonder(rule.ponderTarget); }
+    private void openJei() { ClientHooks.openJei(ManagerScreen.jeiStack(rule), ManagerScreen.jeiMode(rule)); }
     private void openCreatePonder() { ClientHooks.openCreatePonder(rule.ponderTarget); }
     private void openPonderer() { ClientHooks.openPonderer(rule.ponderTarget); }
+    private boolean insidePanel(double x, double y) {
+        int cx = width / 2, cy = height / 2 - 8, panelWidth = Math.min(350, width - 26);
+        int left = cx - panelWidth / 2, right = cx + panelWidth / 2, top = Math.max(10, cy - 56), bottom = Math.min(height - 24, cy + 56);
+        return x >= left && x <= right && y >= top && y <= bottom;
+    }
     private long elapsed() { return openedAt < 0 ? 0 : Math.max(0, Util.getMillis() - openedAt); }
     private static float clamp(float value) { return Math.max(0, Math.min(1, value)); }
     private String fullDescription() { return TranslatedText.resolve(rule.description); }

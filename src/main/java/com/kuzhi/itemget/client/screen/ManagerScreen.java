@@ -34,10 +34,11 @@ public final class ManagerScreen extends CrispScreen {
     private final boolean editable;
     private final Set<Integer> selectedMany = new HashSet<>();
     private EditBox search;
+    private Button filterButton;
     private String query = "";
     private ManagerFilter filter = ManagerFilter.ALL;
     private int selected = -1, scroll;
-    private boolean multiSelect, dragSelecting, draggingScrollbar;
+    private boolean multiSelect, dragSelecting, draggingScrollbar, filterOpen;
     private int pressedIndex = -1, scrollbarGrab;
     private long pressedAt;
 
@@ -49,7 +50,7 @@ public final class ManagerScreen extends CrispScreen {
 
     @Override protected void init() {
         int top = controlsTop(), h = 18, left = listLeft();
-        addRenderableWidget(Button.builder(Component.translatable(filter.key), b -> { cycleFilter(); }).bounds(left, top, 78, h).build());
+        filterButton = addRenderableWidget(Button.builder(filterLabel(), b -> { filterOpen = !filterOpen; }).bounds(left, top, 78, h).build());
         search = new EditBox(font, left + 84, top, Math.max(80, listRight() - left - 84), h, Component.translatable("item_get.handbook.search"));
         search.setValue(query);
         search.setHint(Component.translatable("item_get.handbook.search"));
@@ -82,9 +83,13 @@ public final class ManagerScreen extends CrispScreen {
         return button;
     }
 
-    private void cycleFilter() {
-        ManagerFilter[] values = ManagerFilter.values();
-        filter = values[(filter.ordinal() + 1) % values.length];
+    private Component filterLabel() {
+        return Component.translatable("item_get.manager.filter.label", Component.translatable(filter.key));
+    }
+
+    private void selectFilter(ManagerFilter next) {
+        filter = next;
+        filterOpen = false;
         scroll = 0;
         selected = -1;
         rebuildWidgets();
@@ -92,7 +97,11 @@ public final class ManagerScreen extends CrispScreen {
 
     private void edit(ReminderRule rule) { minecraft.setScreen(new RuleEditorScreen(this, rule, rules.contains(rule), saved -> { if (!rules.contains(saved)) rules.add(saved); save(); })); }
     private void previewSelected(){if(selected<0||selected>=rules.size())return;ReminderRule rule=rules.get(selected);if("SIDE".equalsIgnoreCase(rule.displayStyle))SideReminderOverlay.preview(rule);else minecraft.setScreen(new ReminderScreen(rule,this));}
-    private void save() { ItemGetNetwork.saveRules(new SaveRulesPacket(com.google.gson.JsonParser.parseString(new com.google.gson.Gson().toJson(rules)).toString())); }
+    private void save() {
+        normalizeAutoSubtitles();
+        ItemGetNetwork.saveRules(new SaveRulesPacket(com.google.gson.JsonParser.parseString(new com.google.gson.Gson().toJson(rules)).toString()));
+    }
+    private void normalizeAutoSubtitles(){for(ReminderRule rule:rules)if(rule.autoSubtitle&&(rule.subtitle==null||rule.subtitle.isBlank()))rule.subtitle=triggerSummary(rule).getString();}
     private void duplicateSelected(){if(selected<0||selected>=rules.size())return;ReminderRule copy=new com.google.gson.Gson().fromJson(new com.google.gson.Gson().toJson(rules.get(selected)),ReminderRule.class);copy.id=UUID.randomUUID().toString();copy.title=copy.title==null||copy.title.isBlank()?Component.translatable("item_get.manager.unnamed_copy").getString():Component.translatable("item_get.manager.copy_title",copy.title).getString();int index=selected+1;rules.add(index,copy);selected=index;save();rebuildWidgets();}
     private void toggleEnabled(){if(selected>=0&&selected<rules.size())rules.get(selected).enabled=!rules.get(selected).enabled;save();rebuildWidgets();}
     private void setSelectedEnabled(boolean enabled){for(int i:selectedMany)if(i>=0&&i<rules.size())rules.get(i).enabled=enabled;save();clearMultiSelection();}
@@ -100,6 +109,7 @@ public final class ManagerScreen extends CrispScreen {
     private void deleteSelected(){if(multiSelect){selectedMany.stream().sorted(Comparator.reverseOrder()).forEach(i->{if(i>=0&&i<rules.size())rules.remove((int)i);});selectedMany.clear();multiSelect=false;}else if(selected>=0&&selected<rules.size())rules.remove(selected);selected=-1;scroll=Math.min(scroll,maxScroll());save();rebuildWidgets();}
 
     @Override public boolean mouseClicked(double x, double y, int button) {
+        if (filterOpen && button == 0) return handleFilterDropdownClick(x, y);
         if (button == 0 && scrollbarHit(x, y)) {
             draggingScrollbar = true;
             scrollbarGrab = (int)y - scrollbarThumbTop();
@@ -123,6 +133,7 @@ public final class ManagerScreen extends CrispScreen {
     }
 
     @Override public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+        if (filterOpen && x >= filterMenuX() && x <= filterMenuX() + filterMenuW() && y >= filterMenuY() && y <= filterMenuY() + filterMenuH()) return true;
         if (x >= listLeft() && x <= listRight() && y >= listTop() && y <= listBottom()) {
             scroll = Math.max(0, Math.min(maxScroll(), scroll - (int)Math.signum(scrollY)));
             return true;
@@ -149,10 +160,11 @@ public final class ManagerScreen extends CrispScreen {
             if (!image) { ItemStack stack = displayStack(rule); g.renderItem(stack, iconLeft, y + 7); }
             String heading = rule.title == null || rule.title.isBlank() ? Component.translatable("item_get.manager.unnamed").getString() : TranslatedText.resolve(rule.title);
             g.drawString(font, heading, listLeft() + 60, y + 5, rule.enabled ? 0xFFFFFF : 0x888888);
-            g.drawString(font, triggerSummary(rule).getString() + (rule.enabled ? "" : Component.translatable("item_get.manager.disabled_suffix").getString()), listLeft() + 60, y + 17, 0xA0A0A0);
+            g.drawString(font, previewSummary(rule, Util.getMillis()).getString() + (rule.enabled ? "" : Component.translatable("item_get.manager.disabled_suffix").getString()), listLeft() + 60, y + 17, 0xA0A0A0);
         }
         renderScrollbar(g);
         renderCrispWidgets(g, mx, my, partial);
+        renderFilterDropdown(g, mx, my);
     }
 
     private List<Integer> visibleIndices() {
@@ -161,7 +173,7 @@ public final class ManagerScreen extends CrispScreen {
         for (int i = 0; i < rules.size(); i++) {
             ReminderRule rule = rules.get(i);
             if (!filter.matches(rule)) continue;
-            String text = (titleOf(rule) + "\n" + triggerSummary(rule).getString() + "\n" + rule.triggerType + "\n" + rule.trigger + "\n" + rule.id).toLowerCase(java.util.Locale.ROOT);
+            String text = (titleOf(rule) + "\n" + triggerSummary(rule).getString() + "\n" + rule.triggerType + "\n" + rule.trigger + "\n" + rule.id + "\n" + nullToEmpty(rule.entryNumber) + "\n" + nullToEmpty(rule.category) + "\n" + nullToEmpty(rule.group)).toLowerCase(java.util.Locale.ROOT);
             if (q.isBlank() || text.contains(q)) out.add(i);
         }
         scroll = Math.max(0, Math.min(scroll, Math.max(0, out.size() - visibleRows())));
@@ -176,9 +188,48 @@ public final class ManagerScreen extends CrispScreen {
     private int listRight(){return Math.min(width-18,width/2+410);}
     private int visibleRows(){return Math.max(1,(listBottom()-listTop())/ROW_H);}
     private int maxScroll(){return Math.max(0,visibleIndicesNoClamp().size()-visibleRows());}
-    private List<Integer> visibleIndicesNoClamp(){String old=query;List<Integer> out=new ArrayList<>();String q=old.trim().toLowerCase(java.util.Locale.ROOT);for(int i=0;i<rules.size();i++){ReminderRule rule=rules.get(i);if(!filter.matches(rule))continue;String text=(titleOf(rule)+"\n"+triggerSummary(rule).getString()+"\n"+rule.triggerType+"\n"+rule.trigger+"\n"+rule.id).toLowerCase(java.util.Locale.ROOT);if(q.isBlank()||text.contains(q))out.add(i);}return out;}
+    private List<Integer> visibleIndicesNoClamp(){String old=query;List<Integer> out=new ArrayList<>();String q=old.trim().toLowerCase(java.util.Locale.ROOT);for(int i=0;i<rules.size();i++){ReminderRule rule=rules.get(i);if(!filter.matches(rule))continue;String text=(titleOf(rule)+"\n"+triggerSummary(rule).getString()+"\n"+rule.triggerType+"\n"+rule.trigger+"\n"+rule.id+"\n"+nullToEmpty(rule.entryNumber)+"\n"+nullToEmpty(rule.category)+"\n"+nullToEmpty(rule.group)).toLowerCase(java.util.Locale.ROOT);if(q.isBlank()||text.contains(q))out.add(i);}return out;}
+    private static String nullToEmpty(String value){return value==null?"":value;}
     private boolean scrollbarHit(double x,double y){return maxScroll()>0&&x>=scrollbarX()-2&&x<=scrollbarX()+5&&y>=listTop()&&y<=listBottom();}
     private int scrollbarX(){return listRight()+5;}
+    private int filterMenuX(){return filterButton == null ? listLeft() : filterButton.getX();}
+    private int filterMenuY(){return filterButton == null ? controlsTop() + 20 : filterButton.getY() + filterButton.getHeight() + 2;}
+    private int filterMenuW(){return Math.max(92, filterButton == null ? 78 : filterButton.getWidth());}
+    private int filterMenuH(){return ManagerFilter.values().length * 18 + 4;}
+    private boolean filterButtonHit(double x, double y){return filterButton != null && x >= filterButton.getX() && x <= filterButton.getX() + filterButton.getWidth() && y >= filterButton.getY() && y <= filterButton.getY() + filterButton.getHeight();}
+    private boolean handleFilterDropdownClick(double x, double y) {
+        if (filterButtonHit(x, y)) {
+            filterOpen = false;
+            return true;
+        }
+        int mx = filterMenuX(), my = filterMenuY(), mw = filterMenuW();
+        if (x >= mx && x <= mx + mw && y >= my && y <= my + filterMenuH()) {
+            int index = ((int)y - my - 2) / 18;
+            ManagerFilter[] values = ManagerFilter.values();
+            if (index >= 0 && index < values.length) selectFilter(values[index]);
+            return true;
+        }
+        filterOpen = false;
+        return true;
+    }
+    private void renderFilterDropdown(GuiGraphics g, int mx, int my){
+        if(!filterOpen)return;
+        int x=filterMenuX(), y=filterMenuY(), w=filterMenuW();
+        g.pose().pushPose();
+        g.pose().translate(0,0,320);
+        g.fill(x,y,x+w,y+filterMenuH(),0xF0201B16);
+        g.fill(x,y,x+w,y+1,0xFFE9B0);
+        g.fill(x,y+filterMenuH()-1,x+w,y+filterMenuH(),0xAA000000);
+        ManagerFilter[] values=ManagerFilter.values();
+        for(int i=0;i<values.length;i++){
+            int rowY=y+2+i*18;
+            boolean hover=mx>=x&&mx<=x+w&&my>=rowY&&my<=rowY+17;
+            if(values[i]==filter)g.fill(x+1,rowY,x+w-1,rowY+17,0xAA7D6846);
+            else if(hover)g.fill(x+1,rowY,x+w-1,rowY+17,0x66513A28);
+            g.drawString(font,font.plainSubstrByWidth(Component.translatable(values[i].key).getString(),w-10),x+5,rowY+5,values[i]==filter?0xFFE9B0:0xD8D8D8,false);
+        }
+        g.pose().popPose();
+    }
     private int scrollbarThumbTop(){int track=listBottom()-listTop(),thumb=scrollbarThumbHeight();return listTop()+(track-thumb)*scroll/Math.max(1,maxScroll());}
     private int scrollbarThumbHeight(){int track=listBottom()-listTop(),total=visibleIndicesNoClamp().size();return Math.max(18,total<=0?track:track*visibleRows()/Math.max(visibleRows(),total));}
     private void dragScrollTo(int y){int track=listBottom()-listTop(),thumb=scrollbarThumbHeight();scroll=Math.max(0,Math.min(maxScroll(),(y-listTop())*Math.max(1,maxScroll())/Math.max(1,track-thumb)));}
@@ -205,6 +256,14 @@ public final class ManagerScreen extends CrispScreen {
         if (type == TriggerType.ITEM_ACQUIRED || type == TriggerType.HOVER_ITEM) return triggerStack(rule, item(rule.target()));
         return switch (type) { case ITEM_ACQUIRED -> item(rule.target()); case ENTITY_KILLED -> new ItemStack(Items.IRON_SWORD); case HEALTH_AT -> new ItemStack(Items.GLISTERING_MELON_SLICE); case HUNGER_AT -> new ItemStack(Items.BREAD); case EFFECT_GAINED -> new ItemStack(Items.POTION); case WEATHER_IS -> new ItemStack(Items.WATER_BUCKET); case TIME_IS -> new ItemStack(Items.CLOCK); case ENTER_BIOME -> new ItemStack(Items.GRASS_BLOCK); case ENTER_STRUCTURE -> new ItemStack(Items.FILLED_MAP); case DIMENSION_CHANGED -> new ItemStack(Items.COMPASS); case DEATH_BY -> new ItemStack(Items.SKELETON_SKULL); case ADVANCEMENT_DONE -> new ItemStack(Items.WRITABLE_BOOK); case OBSERVE_BLOCK -> item(rule.trigger.has("block") ? rule.trigger.get("block").getAsString() : "minecraft:oak_log"); case OBSERVE_ENTITY -> new ItemStack(Items.SPYGLASS); case HOVER_ITEM -> item(rule.target()); case MANUAL -> new ItemStack(Items.COMMAND_BLOCK); };
     }
+    public static ItemStack jeiStack(ReminderRule rule) {
+        if (rule == null || "OFF".equalsIgnoreCase(rule.jeiMode)) return ItemStack.EMPTY;
+        if (rule.jeiTarget != null && !rule.jeiTarget.isBlank()) return item(rule.jeiTarget);
+        TriggerType type = TriggerType.parse(rule.triggerType);
+        return type == TriggerType.ITEM_ACQUIRED || type == TriggerType.HOVER_ITEM ? triggerStack(rule, item(rule.target())) : ItemStack.EMPTY;
+    }
+    public static boolean hasJeiTarget(ReminderRule rule) { return !jeiStack(rule).isEmpty(); }
+    public static String jeiMode(ReminderRule rule) { return "USES"; }
     static Component targetName(ReminderRule rule) {
         TriggerType type = TriggerType.parse(rule.triggerType);
         if (type == TriggerType.ITEM_ACQUIRED) return triggerStack(rule, item(rule.target())).getHoverName();
@@ -229,10 +288,15 @@ public final class ManagerScreen extends CrispScreen {
     }
     public static Component displaySubtitle(ReminderRule rule, long timeMs) {
         if (rule.subtitle != null && !rule.subtitle.isBlank()) return TranslatedText.component(rule.subtitle);
+        if (!rule.autoSubtitle) return Component.empty();
         List<RuleConditions.Entry> entries = RuleConditions.entries(rule);
         if (entries.size() <= 1) return singleTriggerSummary(rule);
         RuleConditions.Entry entry = entries.get((int)((Math.max(0L, timeMs) / 1800L) % entries.size()));
         return singleTriggerSummary(conditionRule(entry));
+    }
+    public static Component previewSummary(ReminderRule rule, long timeMs) {
+        Component subtitle = displaySubtitle(rule, timeMs);
+        return subtitle.getString().isBlank() ? triggerSummary(rule) : subtitle;
     }
     private static Component singleTriggerSummary(ReminderRule rule) {
         TriggerType type = TriggerType.parse(rule.triggerType); String name = targetName(rule).getString();
