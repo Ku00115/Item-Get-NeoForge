@@ -58,7 +58,7 @@
   "item_get.handbook.filter.advancement": "进度",
   "item_get.handbook.filter.ponder": "思索",
   "item_get.side.hint": "打开手册查看详情",
-  "item_get.side.detail_hint": "%s 详情",
+  "item_get.side.detail_hint": "按【%s】键以查看详情",
   "item_get.editor.edit_title": "编辑提醒",
   "item_get.editor.create_title": "新建提醒",
   "item_get.editor.trigger": "触发：%s ▾",

@@ -58,7 +58,7 @@
   "item_get.handbook.filter.advancement": "Adv",
   "item_get.handbook.filter.ponder": "Ponder",
   "item_get.side.hint": "Open the handbook for details",
-  "item_get.side.detail_hint": "%s Detail",
+  "item_get.side.detail_hint": "Press %s to view details",
   "item_get.editor.edit_title": "Edit Reminder",
   "item_get.editor.create_title": "New Reminder",
   "item_get.editor.trigger": "Trigger: %s v",
